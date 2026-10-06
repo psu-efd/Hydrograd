@@ -1,4 +1,17 @@
-"""Bathymetry (zb) inversion: consistent h_still, reverse mode, LBFGS stage."""
+"""Bathymetry (zb) inversion: consistent h_still, reverse mode, LBFGS stage.
+
+The case is Julia's ``oneD_channel_with_bump`` (refined mesh) with its forward truth file as
+observations. The bed elevation zb (m, one value per cell) is the control variable. With
+decision D1 the still-water depth is h_still = w_still - zb, so changing zb changes h_still
+consistently.
+
+What is checked (both tests are slow):
+- The reverse-mode gradient of the WSE loss with respect to zb is finite and matches a central
+  finite difference in one cell to a relative error of 1e-3. A tight ODE tolerance
+  (rtol 1e-9, atol 1e-12) is needed for both AD and FD to be accurate.
+- Two Adam iterations followed by two L-BFGS iterations run, write five finite loss values,
+  and reduce the loss.
+"""
 
 from __future__ import annotations
 
@@ -23,12 +36,26 @@ pytestmark = requires_jl
 
 
 def _make_case(tmp_path):
-    src = EXAMPLES / "forward_simulation" / "oneD_channel_with_bump"
-    d = tmp_path / "zb_inv"
-    d.mkdir()
-    for f in src.glob("oneD_channel_with_bump_refined.*"):
-        shutil.copy(f, d)
-    shutil.copy(src / "forward_simulation_solution_truth.json", d)
+    """Copy the refined bump case and its truth file, and write a zb-inversion run_control.json.
+
+    The inversion runs t in [0, 20] s with Tsit5, starts from a flat zb = 0, and bounds zb to
+    [0, 0.2] m with a slope bound of 0.2.
+
+    Args:
+        tmp_path: pytest temporary folder.
+
+    Returns:
+        The case folder (``tmp_path / "zb_inv"``).
+    """
+    # Copy the mesh and SRH-2D files plus the forward truth file
+    source_dir = EXAMPLES / "forward_simulation" / "oneD_channel_with_bump"
+    case_dir = tmp_path / "zb_inv"
+    case_dir.mkdir()
+    for case_file in source_dir.glob("oneD_channel_with_bump_refined.*"):
+        shutil.copy(case_file, case_dir)
+    shutil.copy(source_dir / "forward_simulation_solution_truth.json", case_dir)
+
+    # Control file: zb inversion with WSE, uv, bound and slope losses; Adam then L-BFGS
     ctrl = {
         "bVerbose": False,
         "control_variables": {"srhhydro_file_name": "oneD_channel_with_bump_refined.srhhydro",
@@ -51,39 +78,52 @@ def _make_case(tmp_path):
                                              "ode_solver_sensealg": "InterpolatingAdjoint()", "ode_solver_nSave": 2},
         },
     }
-    (d / "run_control.json").write_text(json.dumps(ctrl))
-    return d
+    (case_dir / "run_control.json").write_text(json.dumps(ctrl))
+    return case_dir
 
 
 @pytest.mark.slow
 def test_zb_gradient_matches_finite_difference(tmp_path) -> None:
-    d = _make_case(tmp_path)
-    case = setup_case(read_control(d / "run_control.json"))
-    truth = load_truth(json.loads((d / "forward_simulation_solution_truth.json").read_text()))
+    """d(WSE loss)/d(zb) in cell 100: reverse-mode AD vs central FD (step 1e-4 m), rel 1e-3."""
+    # Set up the case and load the observations
+    case_dir = _make_case(tmp_path)
+    case = setup_case(read_control(case_dir / "run_control.json"))
+    truth_text = (case_dir / "forward_simulation_solution_truth.json").read_text()
+    truth = load_truth(json.loads(truth_text))
+
     # Gradients of a loosely integrated solve are poor (5x off at rtol 1e-3); use a tight tolerance.
     # At second order the limiter amplifies time-integration noise in finite differences
     # (FD at rtol 1e-6 was 3.5 % off while AD was stable); use a tight tolerance for the FD check.
-    s = dataclasses.replace(case.ode, rtol=1e-9, atol=1e-12)
+    settings = dataclasses.replace(case.ode, rtol=1e-9, atol=1e-12)
 
     def loss(zb):
-        U = solve_swe(case.model, {"zb": zb}, case.U0, s).ys[-1]
+        """WSE data loss of the final state for the bed elevation zb (m), shape [n_cells]."""
+        U = solve_swe(case.model, {"zb": zb}, case.U0, settings).ys[-1]
         return data_losses(case.model, U, truth, zb)["wse"]
 
     # Hydrostatic reconstruction uses max(z_L, z_R): with exactly equal neighbouring beds
     # (a flat bed) the residual has a kink and AD returns a subgradient. Avoid ties here.
     zb0 = jnp.asarray(0.05 + 0.01 * np.random.default_rng(1).random(case.model.n_cells))
-    g = jax.jit(jax.grad(loss))(zb0)
-    assert np.all(np.isfinite(np.asarray(g)))
-    i, eps = 100, 1e-4  # FD with eps << sqrt(rtol) is dominated by adaptive-step noise
-    e = jnp.zeros_like(zb0).at[i].set(eps)
-    fd = (float(loss(zb0 + e)) - float(loss(zb0 - e))) / (2 * eps)
-    assert abs(float(g[i]) - fd) <= 1e-3 * abs(fd)
+    gradient = jax.jit(jax.grad(loss))(zb0)
+    assert np.all(np.isfinite(np.asarray(gradient)))
+
+    # Central FD in one cell
+    i = 100
+    eps = 1e-4  # FD with eps << sqrt(rtol) is dominated by adaptive-step noise
+    perturbation = jnp.zeros_like(zb0).at[i].set(eps)
+    fd = (float(loss(zb0 + perturbation)) - float(loss(zb0 - perturbation))) / (2 * eps)
+    assert abs(float(gradient[i]) - fd) <= 1e-3 * abs(fd)
 
 
 @pytest.mark.slow
 def test_zb_inversion_adam_then_lbfgs_reduces_loss(tmp_path) -> None:
-    d = _make_case(tmp_path)
-    run_inversion(setup_case(read_control(d / "run_control.json")))
-    losses = [float(r[1]) for r in list(csv.reader(open(d / "inversion_loss_history.csv")))[1:]]
+    """2 Adam + 2 L-BFGS iterations: five finite loss values, and the last below the first."""
+    # Run the inversion
+    case_dir = _make_case(tmp_path)
+    run_inversion(setup_case(read_control(case_dir / "run_control.json")))
+
+    # Read the loss history (column 1, header row skipped)
+    loss_rows = list(csv.reader(open(case_dir / "inversion_loss_history.csv")))
+    losses = [float(row[1]) for row in loss_rows[1:]]
     assert len(losses) == 5 and all(np.isfinite(losses))
     assert losses[-1] < losses[0]
