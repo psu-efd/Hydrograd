@@ -110,7 +110,7 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, b: 
 def _solve(m: SWEModel, lin, b: Array, a: Array, transpose: bool) -> Array:
     out = jax.ShapeDtypeStruct(b.shape, jnp.float64)
     return jax.pure_callback(lambda c, A, C, v, s: _host_solve(m, c, A, C, v, s, transpose),
-                             out, *lin, b, a)
+                             out, *lin, b, a, vmap_method="sequential")
 
 
 def _newton_step(m: SWEModel, s: ImplicitSettings, theta: Theta, U0: Array, t0: Array,

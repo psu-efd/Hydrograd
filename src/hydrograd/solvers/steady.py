@@ -145,7 +145,7 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, rhs
 def _solve(m: SWEModel, lin: tuple[Array, Array, Array], b: Array, shift: Array, transpose: bool) -> Array:
     out = jax.ShapeDtypeStruct(b.shape, jnp.float64)
     return jax.pure_callback(lambda c, a, cc, v, s: _host_solve(m, c, a, cc, v, s, transpose),
-                             out, *lin, b, shift)
+                             out, *lin, b, shift, vmap_method="sequential")
 
 
 def newton_solve(m: SWEModel, theta: Theta, U0: Array, s: NewtonSettings) -> tuple[Array, Array, Array]:
