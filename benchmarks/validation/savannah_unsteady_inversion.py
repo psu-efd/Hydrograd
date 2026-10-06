@@ -7,11 +7,12 @@ WSE at N_GAUGES cells along the reach every 10 min (optionally noisy). Unknowns:
 1-5 (zone 0 has no cells), start 0.03. Inversion model: implicit backward Euler (dt = 30 s,
 per-step IFT adjoints); optimizer: L-BFGS (optax, zoom line search).
 
-Usage: python savannah_unsteady_inversion.py JL_CASE_DIR OUT_DIR [NOISE_MM] [N_ITER] [GAUGES] [DT]
+Usage: python savannah_unsteady_inversion.py JL_CASE_DIR OUT_DIR [NOISE_MM] [N_ITER] [GAUGES] [DT] [N0]
 (JL_CASE_DIR: Hydrograd.jl examples/SWE_2D/forward_simulation/Savannah_River; it is copied.)
 GAUGES: "bins" (default; deepest cell in each of N_GAUGES streamwise bins, which puts 5 of 6
 gauges in the main-channel zone 3) or "zones" (GAUGES_PER_ZONE cells of median depth per zone,
 spread along x, so every roughness zone is observed). DT: implicit step (s), default 30.
+N0: initial n in every zone, default 0.03 (multi-start studies).
 """
 import json, shutil, sys, time
 from pathlib import Path
@@ -76,6 +77,7 @@ def main():
     n_iter = int(sys.argv[4]) if len(sys.argv) > 4 else 30
     layout = sys.argv[5] if len(sys.argv) > 5 else "bins"
     dt_impl = float(sys.argv[6]) if len(sys.argv) > 6 else DT_IMPLICIT
+    n0 = float(sys.argv[7]) if len(sys.argv) > 7 else 0.03
     out.mkdir(parents=True, exist_ok=True)
     d = out / "case"
     if not d.exists():
@@ -107,7 +109,7 @@ def main():
         L = jnp.mean((stages(n_zone) - obs) ** 2)
         return jnp.where(jnp.isfinite(L), L, 1.0e6)
 
-    p = jnp.log(jnp.full(len(zones), 0.03))
+    p = jnp.log(jnp.full(len(zones), n0))
     vg = jax.jit(jax.value_and_grad(loss))
     opt = optax.lbfgs(linesearch=optax.scale_by_zoom_linesearch(max_linesearch_steps=8))
     state = opt.init(p)
@@ -131,7 +133,7 @@ def main():
                "n_rel_error": (np.abs(n_inv - n_true[1:]) / n_true[1:]).tolist(),
                "final_rms_stage_misfit_mm": float(np.sqrt(hist[-1]) * 1000), "loss_history": hist,
                "gauge_cells": np.asarray(gauge).tolist(), "gauge_layout": layout,
-               "dt_implicit_s": dt_impl}
+               "dt_implicit_s": dt_impl, "n0": n0}
     (out / f"summary_noise{noise_mm:g}mm.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: v for k, v in summary.items() if k != "loss_history"}), flush=True)
 
