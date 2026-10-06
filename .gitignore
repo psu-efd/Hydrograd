@@ -10,8 +10,8 @@ __pycache__/
 *.egg-info/
 # Slurm logs
 hpc/roar/*.out
-# Published papers/reports (not ours to redistribute)
-background/*.pdf
+# Background material: published papers/reports and private notes (kept local)
+background/
 # User's general Claude Code config (not project code; may hold tokens in settings.json)
 .claude/
 # Julia reference dumps and their generator scripts (kept local; regenerate on Roar)
