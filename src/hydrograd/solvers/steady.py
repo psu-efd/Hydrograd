@@ -20,7 +20,9 @@ parameters). The closure must be local (no whole-array LayerNorm), so that J is 
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from typing import Any
@@ -74,14 +76,22 @@ except ImportError:  # pragma: no cover - optional dependency
 PARDISO_MIN_ROWS = 30_000  # below this SciPy's SuperLU is as fast
 
 
-_FACTOR_CACHE: "dict[bytes, Any]" = {}
+_FACTOR_CACHE: dict[bytes, Any] = {}
 _FACTOR_CACHE_SIZE = 4
+# All host factorizations and solves run on this one persistent Python thread. XLA calls
+# host callbacks from C++ worker threads, each with a temporary Python thread state, and
+# SciPy's SuperLU wrapper tracks its allocations per thread state: a cached SuperLU object
+# freed in a later callback is never released (~3 MB leaked per factorization; implicit
+# Savannah inversions ran out of 48 GB in 40 min). On a persistent thread the cached
+# factorizations are created and freed under one thread state.
+_SOLVER_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hydrograd-solve")
 
 
-def _factorized(M: sp.spmatrix):
-    """Cached SuperLU factorization of M (keyed by a hash of its values and pattern)."""
-    import hashlib
+def _factorized(M: sp.spmatrix) -> Any:
+    """Cached SuperLU factorization of M (keyed by a hash of its values and pattern).
 
+    Call only on ``_SOLVER_THREAD`` (via ``_sparse_solve``).
+    """
     Mc = M.tocsc()
     h = hashlib.blake2b(Mc.data.tobytes(), digest_size=16)
     h.update(Mc.indices.tobytes())
@@ -103,6 +113,11 @@ def _sparse_solve(M: sp.spmatrix, B: np.ndarray) -> np.ndarray:
     propagates as a non-finite state/loss (which optimizers and step control can reject)
     rather than aborting the whole traced computation inside a host callback.
     """
+    return _SOLVER_THREAD.submit(_sparse_solve_impl, M, B).result()
+
+
+def _sparse_solve_impl(M: sp.spmatrix, B: np.ndarray) -> np.ndarray:
+    """Body of ``_sparse_solve``; runs on ``_SOLVER_THREAD``."""
     if not (np.all(np.isfinite(M.data)) and np.all(np.isfinite(B))):
         return np.full(np.shape(B), np.nan)
     try:
