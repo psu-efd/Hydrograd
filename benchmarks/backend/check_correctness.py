@@ -1,4 +1,16 @@
-"""Correctness checks: well-balancing, backend agreement, gradient vs FD."""
+"""Correctness checks: well-balancing, backend agreement, gradient vs FD.
+
+On a 2000-cell jittered channel (200 m x 20 m) the script checks:
+
+1. Well-balancing: R(U) = 0 for a lake at rest (h + zb = 1.5 m, no flow).
+2. Backend agreement: PyTorch and JAX depth snapshots of an unsteady inflow
+   run (q_in = 1 m^2/s) agree to round-off.
+3. Gradients of the depth-misfit loss (n field and NN closure): reverse-mode
+   AD against a central finite difference along a random unit direction d,
+   dL/dd ~ (L(theta + eps d) - L(theta - eps d)) / (2 eps), and JAX vs PyTorch.
+4. Mass balance after marching toward steady state: the cross-section mean
+   of hu approaches q_in.
+"""
 
 from __future__ import annotations
 
@@ -12,34 +24,42 @@ from physics import FlowConfig, residual
 
 
 def main() -> None:
+    """Run the four checks and print one result line per check."""
+    # ---- 0. mesh, still-water state and the "true" n field ------------------
     mesh = make_channel_mesh(2000, length=200.0, width=20.0)
     print(f"mesh: {mesh.n_cells} cells, {mesh.n_faces} faces, min_dx={mesh.min_dx:.3f} m")
     U0 = initial_state(mesh, 1.5)
     nf = true_n_field(mesh)
 
-    # 1) lake at rest: zero inflow, outlet WSE = still WSE -> R(U0) == 0
+    # ---- 1. lake at rest: zero inflow, outlet WSE = still WSE -> R(U0) == 0 -
     rest = FlowConfig(q_in=0.0, wse_out=1.5)
     jops = JaxOps("float64")
     R = np.asarray(residual(jops, mesh_arrays(jops, mesh), rest, {"n": jops.asarray(nf)},
                             jops.asarray(U0)))
     print(f"[well-balanced] max|R(lake at rest)| = {np.abs(R).max():.3e}")
 
-    # 2) torch vs jax forward agreement on an unsteady inflow run
+    # ---- 2. torch vs jax forward agreement on an unsteady inflow run --------
     cfg = FlowConfig(q_in=1.0, wse_out=1.5)
     dt = cfl_dt(mesh)
-    n_save, k = 10, 50
+    n_save = 10
+    k = 50
+
+    # Same case built on both backends, without checkpointing
     J = sim_jax.build(mesh, cfg, dt, n_save, k, checkpoint=False)
     T = sim_torch.build(mesh, cfg, dt, n_save, k, checkpoint=False)
     thJ = sim_jax.to_theta(J["ops"], "field", nf, device=J["device"])
     thT = sim_torch.to_theta(T["ops"], "field", nf)
+
+    # Depth snapshots (m), shape [n_save, n_cells]
     hJ = np.asarray(J["simulate"](thJ, jops.asarray(U0)))
     hT = T["simulate"](thT, T["ops"].asarray(U0)).cpu().numpy()
     print(f"[torch vs jax] dt={dt:.4f}s  max|h_jax-h_torch| = {np.abs(hJ - hT).max():.3e}"
           f"  (h range {hJ.min():.3f}..{hJ.max():.3f} m)")
 
-    # 3) gradient check (field + NN modes) against central finite differences
+    # ---- 3. gradient check (field + NN modes) against central finite differences
     h_obs = hJ + 0.0  # observations from the "true" n field
     for mode in ("field", "nn"):
+        # Loss and reverse-mode gradient on both backends from a uniform guess
         n_guess = np.full(mesh.n_cells, 0.035)
         th = sim_jax.to_theta(J["ops"], mode, n_guess, device=J["device"])
         L, g = J["grad"](th, jops.asarray(U0), jops.asarray(h_obs))
@@ -47,36 +67,51 @@ def main() -> None:
         LT, gT = T["grad"](thT2, T["ops"].asarray(U0), T["ops"].asarray(h_obs))
         import jax
 
+        # Flatten parameters and gradients for the directional comparison
         from jax.flatten_util import ravel_pytree
         flat, unravel = ravel_pytree(th)
         gflat, _ = ravel_pytree(g)
         gT_flat = np.concatenate([x.detach().cpu().numpy().ravel() for x in gT])
+
+        # Random unit direction d (seeded) and finite-difference step eps
         rng = np.random.default_rng(1)
         d = rng.normal(size=flat.shape)
         d /= np.linalg.norm(d)
         eps = 1e-6 if mode == "field" else 1e-5
+
+        # Central finite difference vs AD directional derivative
         Lp = J["loss"](unravel(flat + eps * d), jops.asarray(U0), jops.asarray(h_obs))
         Lm = J["loss"](unravel(flat - eps * d), jops.asarray(U0), jops.asarray(h_obs))
         fd = float(Lp - Lm) / (2 * eps)
         ad = float(np.dot(np.asarray(gflat), d))
-        print(f"[grad {mode:5s}] L_jax={float(L):.6e} L_torch={float(LT):.6e} "
-              f"AD={ad:.6e} FD={fd:.6e} relerr={abs(ad - fd) / abs(fd):.2e} "
-              f"|g_jax-g_torch|/|g|={np.linalg.norm(np.asarray(gflat) - gT_flat) / np.linalg.norm(gflat):.2e}")
 
-    # 4) march toward steady state; check mass balance q_out ~ q_in
+        # Relative errors: AD vs FD, and JAX vs PyTorch gradient
+        rel_err_fd = abs(ad - fd) / abs(fd)
+        rel_err_backend = np.linalg.norm(np.asarray(gflat) - gT_flat) / np.linalg.norm(gflat)
+        print(f"[grad {mode:5s}] L_jax={float(L):.6e} L_torch={float(LT):.6e} "
+              f"AD={ad:.6e} FD={fd:.6e} relerr={rel_err_fd:.2e} "
+              f"|g_jax-g_torch|/|g|={rel_err_backend:.2e}")
+
+    # ---- 4. march toward steady state; check mass balance q_out ~ q_in ------
     Js = sim_jax.build(mesh, cfg, dt, 20, 1000, checkpoint=False)
     import jax
 
     def run_U(theta, U0_):
+        """Final state [n_cells, 3] after 20000 SSP-RK2 steps from U0_."""
         from physics import ssprk2_step
         ops = Js["ops"]
         m = mesh_arrays(ops, mesh)
+
         def body(U, _):
+            """scan body: one step, no per-step output."""
             return ssprk2_step(ops, m, cfg, theta, U, dt), None
+
         U, _ = jax.lax.scan(body, U0_, None, length=20000)
         return U
 
     U = np.asarray(jax.jit(run_U)(thJ, jops.asarray(U0)))
+
+    # Cross-section means over 2 m-wide strips at three stations
     xc = mesh.centroid[:, 0]
     for xs in (20.0, 100.0, 180.0):
         sel = np.abs(xc - xs) < 2.0
