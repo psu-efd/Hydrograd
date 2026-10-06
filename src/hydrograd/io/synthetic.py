@@ -83,6 +83,7 @@ def write_channel_case(
     zb_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
     ic_file: str | None = None,
     order: int = 2,
+    zone_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
 ) -> dict[str, int]:
     """Write ``channel.srhgeom/.srhhydro/.srhmat`` and a forward ``run_control.json``.
 
@@ -112,6 +113,9 @@ def write_channel_case(
         zb_fn: optional bed elevation z_b(x, y) (m) at nodes, replacing slope + bump.
         ic_file: optional existing IC JSON (keys wse, wstill, q_x, q_y) in ``case_dir``.
         order: spatial order (``numerics.spatial_order`` in run_control.json).
+        zone_fn: optional material ID (an integer >= 1) of each cell from its centroid
+            (x, y) (m); every material gets Manning's n ``n_manning``. Default: all cells
+            in material 1.
 
     Returns:
         {"n_cells": ..., "n_nodes": ...}
@@ -223,11 +227,34 @@ def write_channel_case(
     (d / "channel.srhhydro").write_text("\n".join(hydro) + "\n")
 
     # ------------------------------------------------------------------
-    # .srhmat: one material zone with every cell.
+    # .srhmat: one material zone with every cell, or the zones of zone_fn.
     # ------------------------------------------------------------------
     cells = np.arange(1, nx * ny + 1)
-    mat_header = "SRHMAT 30\nNMaterials 2\nMatName 1 \"channel\"\nMaterial 1 "
-    mat_text = mat_header + _fmt_ids(cells) + "\n"
+    if zone_fn is None:
+        mat_header = "SRHMAT 30\nNMaterials 2\nMatName 1 \"channel\"\nMaterial 1 "
+        mat_text = mat_header + _fmt_ids(cells) + "\n"
+    else:
+        # Cell centroids in the cell order of the .srhgeom file (i outer, j inner).
+        x_centre = 0.5 * (x[:-1] + x[1:])
+        y_centre = 0.5 * (y[:-1] + y[1:])
+        XC, YC = np.meshgrid(x_centre, y_centre, indexing="ij")
+        material = np.asarray(zone_fn(XC, YC), dtype=int).ravel()
+        if material.min() < 1:
+            raise ValueError("zone_fn must return material IDs >= 1")
+
+        n_materials = int(material.max()) + 1
+        mat_lines = ["SRHMAT 30", f"NMaterials {n_materials}"]
+        for zone in range(1, n_materials):
+            mat_lines.append(f'MatName {zone} "zone{zone}"')
+            mat_lines.append(f"Material {zone} " + _fmt_ids(cells[material == zone]))
+        mat_text = "\n".join(mat_lines) + "\n"
+
+        # Manning's n for the extra materials (0 and 1 are already listed).
+        extra = [f"ManningsN {zone} {n_manning}" for zone in range(2, n_materials)]
+        hydro_text = (d / "channel.srhhydro").read_text()
+        hydro_text = hydro_text.replace(f"ManningsN 1 {n_manning}\n",
+                                        f"ManningsN 1 {n_manning}\n" + "".join(e + "\n" for e in extra))
+        (d / "channel.srhhydro").write_text(hydro_text)
     (d / "channel.srhmat").write_text(mat_text)
 
     # ------------------------------------------------------------------

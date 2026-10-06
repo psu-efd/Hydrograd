@@ -13,7 +13,8 @@ Pipeline
    w_still (m), and unit discharges q_x, q_y (m^2/s), as in ``process_ICs_2D.jl``.
 5. Flow-resistance model: constant Manning's n per material zone, an n(h, |U|, ks) law,
    or a neural-network closure (UDE mode).
-6. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
+6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`).
+7. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
    overrides (scheme, spatial order, limiter, checkpointing), and the ODE settings.
 
 The initial state is
@@ -50,7 +51,7 @@ from hydrograd.io.control import Control
 from hydrograd.io.srh2d import SRHCase, read_srh_case
 from hydrograd.mesh import Mesh, build_mesh
 from hydrograd.params.manning import ManningLaw
-from hydrograd.physics.model import Resistance, SWEModel, build_model
+from hydrograd.physics.model import Resistance, SWEModel, Vegetation, build_model
 from hydrograd.solvers.ode import ODESettings
 
 logger = logging.getLogger(__name__)
@@ -283,6 +284,11 @@ def _resistance(ctrl: Control, mat_id: np.ndarray) -> tuple[Resistance, Any]:
     # ------------------------------------------------------------------
     # 2. UDE mode: neural-network closure
     # ------------------------------------------------------------------
+    if ctrl.mode == "ude" and ctrl.opt("UDE_choice") == "VegetationCD":
+        # The network predicts the stem drag coefficient (see _vegetation); the bed keeps
+        # a constant Manning's n per material zone.
+        return Resistance(mode="zone"), None
+
     if ctrl.mode == "ude":
         choice = ctrl.opt("UDE_choice")
         nn = ctrl.opt("UDE_NN_config")
@@ -331,6 +337,104 @@ def _resistance(ctrl: Control, mat_id: np.ndarray) -> tuple[Resistance, Any]:
     return Resistance(mode="zone"), None
 
 
+def _per_material(values: Any, n_materials: int, default: float, name: str) -> tuple[float, ...]:
+    """Expand a per-material specification to one value per material ID.
+
+    Args:
+        values: a number (same for all materials), a list with one value per material ID,
+            or a dict ``{"<material ID>": value}`` (other materials get ``default``).
+        n_materials: number of material IDs (0 .. n_materials - 1).
+        default: value for materials missing from a dict.
+        name: entry name, for error messages.
+
+    Returns:
+        One float per material ID.
+    """
+    # A single number applies to every material.
+    if isinstance(values, (int, float)):
+        return tuple(float(values) for _ in range(n_materials))
+
+    # A list gives the value of every material in ID order.
+    if isinstance(values, list):
+        if len(values) != n_materials:
+            raise ValueError(f"vegetation.{name}: expected {n_materials} values, got {len(values)}")
+        return tuple(float(v) for v in values)
+
+    # A dict gives values for some material IDs.
+    expanded = [default] * n_materials
+    for key, value in values.items():
+        material = int(key)
+        if not 0 <= material < n_materials:
+            raise ValueError(f"vegetation.{name}: no material ID {material}")
+        expanded[material] = float(value)
+    return tuple(expanded)
+
+
+def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
+    """Vegetation drag settings from the optional ``"vegetation"`` block of the run control.
+
+    Example (material 2 is a stem patch with d = 0.01 m, dS = 0.1 m, so a = 1 /m)::
+
+        "vegetation": {
+            "a":  {"2": 1.0},          # frontal area per unit volume (1/m), per material
+            "CD": {"2": 1.0}           # drag coefficient (-), per material
+        }
+
+    Instead of ``a``, the stem diameter ``d`` (m) and spacing ``spacing`` (m) may be given
+    per material; then a = d / spacing^2. In UDE mode with ``UDE_choice = "VegetationCD"``
+    the drag coefficient comes from a local network C_D = f(h, |u|, a); its normalization
+    bounds are ``h_bounds`` (m), ``Umag_bounds`` (m/s), ``a_bounds`` (1/m) and
+    ``output_bounds`` (C_D) in ``UDE_NN_config``.
+
+    Args:
+        ctrl: run control.
+        n_materials: number of material IDs.
+
+    Returns:
+        The vegetation settings (mode ``none`` if the block is absent).
+    """
+    block = ctrl.raw.get("vegetation")
+    is_cd_network = ctrl.mode == "ude" and ctrl.opt("UDE_choice") == "VegetationCD"
+
+    if not block:
+        if is_cd_network:
+            raise ValueError("UDE_choice 'VegetationCD' needs a 'vegetation' block with 'a'")
+        return Vegetation()
+
+    # Frontal area per unit volume a (1/m): given directly, or from d and the spacing.
+    if "a" in block:
+        a_zone = _per_material(block["a"], n_materials, 0.0, "a")
+    else:
+        diameters = _per_material(block["d"], n_materials, 0.0, "d")
+        spacings = _per_material(block["spacing"], n_materials, 1.0, "spacing")
+        a_zone = tuple(d / s ** 2 for d, s in zip(diameters, spacings, strict=True))
+
+    CD_zone = _per_material(block.get("CD", 1.0), n_materials, 1.0, "CD")
+
+    # Constant C_D per zone (forward, sensitivity, inversion of veg_CD).
+    if not is_cd_network:
+        return Vegetation(mode="zone", a_zone=a_zone, CD_zone=CD_zone)
+
+    # Local network C_D = f(h, |u|, a).
+    nn = ctrl.opt("UDE_NN_config")
+
+    def bounds(key: str, default: tuple[float, float]) -> tuple[float, float]:
+        """Normalization bounds ``(lower, upper)`` from ``UDE_NN_config``."""
+        lower, upper = nn.get(key, default)
+        return float(lower), float(upper)
+
+    return Vegetation(
+        mode="nn_CD",
+        a_zone=a_zone,
+        CD_zone=CD_zone,
+        activations=tuple(nn["activations"]),
+        CD_bounds=bounds("output_bounds", (0.0, 3.0)),
+        h_bounds=bounds("h_bounds", (0.0, 1.0)),
+        umag_bounds=bounds("Umag_bounds", (0.0, 1.0)),
+        a_bounds=bounds("a_bounds", (0.0, max(a_zone) if a_zone else 1.0)),
+    )
+
+
 def setup_case(ctrl: Control) -> Case:
     """Read all case files and build the model, initial condition and ODE settings.
 
@@ -371,6 +475,11 @@ def setup_case(ctrl: Control) -> Case:
         mesh, zb, wstill, mat_id, n_zone, inlet_q_params, exit_h_params, resistance, ks, unit
     )
 
+    # Extension: optional vegetation drag ("vegetation" block).
+    vegetation = _vegetation(ctrl, srh.mat.n_materials)
+    if vegetation.mode != "none":
+        model = dataclasses.replace(model, vegetation=vegetation)
+
     # Extension: optional "numerics" block (scheme, spatial_order, limiter, checkpoints,
     # checkpoint_memory_gb).
     num = ctrl.raw.get("numerics", {})
@@ -400,7 +509,8 @@ def setup_case(ctrl: Control) -> Case:
         ode = dataclasses.replace(ode, checkpoints=checkpoints, checkpoint_memory_gb=memory_gb)
 
     logger.info(
-        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, solver=%s",
-        mesh.n_cells, mesh.n_faces, mesh.bc_types, resistance.mode, ode.solver,
+        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, vegetation=%s, solver=%s",
+        mesh.n_cells, mesh.n_faces, mesh.bc_types, resistance.mode, model.vegetation.mode,
+        ode.solver,
     )
     return Case(ctrl, srh, mesh, model, U0, ode, wse, wstill, unit)

@@ -53,6 +53,7 @@ from hydrograd.physics.model import (
     SWEModel,
 )
 from hydrograd.physics.roe import roe_flux, smooth_sqrt
+from hydrograd.physics.vegetation import vegetation_drag_rate
 
 __all__ = [
     "boundary_values_at",
@@ -173,7 +174,35 @@ def manning_n_cells(m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Array) -
 def friction_coefficient(
     m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Array, n: Array,
 ) -> Array:
-    """Friction rate c (1/s) per cell, with friction = c q (Manning, or NN magnitude / |q|).
+    """Friction rate c (1/s) per cell, with friction = c q.
+
+    c is the bed friction (Manning, or the NN magnitude / |q|) plus, if the model has
+    vegetation, the stem drag rate c_veg = 1/2 C_D a |u| (``physics.vegetation``).
+
+    Args:
+        m: the model (``g``, ``k_n``, ``h_small``, resistance mode, vegetation).
+        theta: differentiable parameters (NN weights, ``veg_CD``, ``veg_a``).
+        h: water depth (m), shape [n_cells].
+        qx, qy: unit discharges (m^2/s), shape [n_cells].
+        n: Manning's n (s/m^(1/3)), shape [n_cells].
+
+    Returns:
+        Friction rate c (1/s), shape [n_cells].
+    """
+    c_bed = _bed_friction_coefficient(m, theta, h, qx, qy, n)
+
+    # No vegetation: the bed friction only (keeps earlier results bit-identical).
+    if m.vegetation.mode == "none":
+        return c_bed
+
+    # Stem drag adds to the bed friction.
+    return c_bed + vegetation_drag_rate(m, theta, h, qx, qy)
+
+
+def _bed_friction_coefficient(
+    m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Array, n: Array,
+) -> Array:
+    """Bed friction rate c_bed (1/s) per cell (Manning, or NN magnitude / |q|).
 
     Args:
         m: the model (``g``, ``k_n``, ``h_small``, resistance mode).
@@ -183,7 +212,7 @@ def friction_coefficient(
         n: Manning's n (s/m^(1/3)), shape [n_cells].
 
     Returns:
-        Friction rate c (1/s), shape [n_cells].
+        c_bed (1/s), shape [n_cells].
     """
     # Smoothed |q| (m^2/s); finite derivative at q = 0.
     q_mag = smooth_sqrt(qx * qx + qy * qy)

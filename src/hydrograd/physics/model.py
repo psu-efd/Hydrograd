@@ -44,7 +44,7 @@ from hydrograd.params.manning import ManningLaw
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["UNITS", "Resistance", "SWEModel", "build_model"]
+__all__ = ["UNITS", "Resistance", "SWEModel", "Vegetation", "build_model"]
 
 # GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
 # formula: U = (k_n / n) R^(2/3) S^(1/2).
@@ -86,6 +86,40 @@ class Resistance:
     ks_bounds: tuple[float, float] = (0.0, 1.0)
     q_bounds: tuple[float, float] = (0.0, 1.0)
     ln_axes: str = "features"
+
+
+@dataclass(frozen=True)
+class Vegetation:
+    """Drag of rigid emergent vegetation (stems), as a momentum sink per unit plan area.
+
+    The drag force per unit plan area divided by the water density is
+
+        F / rho = 1/2 C_D a h |u| u     (m^2/s^2),
+
+    with a the frontal area per unit volume (1/m), h the depth (m) and u the depth-averaged
+    velocity (m/s). With q = h u it equals c_veg q, where c_veg = 1/2 C_D a |u| (1/s); this
+    rate is added to the bed-friction rate (see ``physics.vegetation``).
+
+    Attributes:
+        mode: ``none`` (no vegetation, default), ``zone`` (C_D per material zone) or
+            ``nn_CD`` (a local neural-network closure C_D = f(h, |u|, a), weights in
+            ``theta["nn"]``).
+        a_zone: frontal area per unit volume a = d / dS^2 for each material ID (1/m);
+            0 where there is no vegetation.
+        CD_zone: drag coefficient C_D for each material ID (-), for ``mode == "zone"``.
+        activations: hidden-layer activations of the C_D network.
+        CD_bounds: output bounds of the network (-).
+        h_bounds, umag_bounds, a_bounds: input normalization ranges (m, m/s, 1/m).
+    """
+
+    mode: str = "none"
+    a_zone: tuple[float, ...] = ()
+    CD_zone: tuple[float, ...] = ()
+    activations: tuple[str, ...] = ()
+    CD_bounds: tuple[float, float] = (0.0, 3.0)
+    h_bounds: tuple[float, float] = (0.0, 1.0)
+    umag_bounds: tuple[float, float] = (0.0, 1.0)
+    a_bounds: tuple[float, float] = (0.0, 10.0)
 
 
 @dataclass(frozen=True, eq=False)
@@ -180,6 +214,7 @@ class SWEModel:
     loss_velocity_eps: float | None = None  # u = q/(h + eps) in losses; None -> h_small
     Q_times: Array | None = None       # time grid (s) when Q is a time series
     WSE_times: Array | None = None     # time grid (s) when WSE is a time series
+    vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
 
     def __hash__(self) -> int:
         """Identity hash, so that a model can be a static argument of ``jax.jit``.

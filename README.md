@@ -56,6 +56,19 @@ hydrograd run            # dispatches on bPerform_Forward_Simulation / _Inversio
 
 **Time series:** `IQParams` and `EWSParamsC` in `.srhhydro` accept an SMS/SRH-2D `.xys` file (times in hours) in place of a number. The series are differentiable, so hydrographs can be inverted.
 
+**Vegetation drag:** an optional top-level `vegetation` block adds the drag of rigid emergent stems, ½ C_D a h |u| u per unit plan area (a = d/ΔS², the frontal area per unit volume). It acts as an extra friction rate ½ C_D a |u|, so every solver and adjoint includes it.
+
+```json
+"vegetation": {
+  "a":  {"2": 1.0},         // 1/m, per material ID (or "d" and "spacing" in m, per material)
+  "CD": {"2": 1.0}          // drag coefficient per material ID
+}
+```
+
+- **Inversion and sensitivity:** `active_param_names: ["veg_CD"]` makes the drag coefficient per material zone the active parameter.
+- **UDE:** `UDE_choice: "VegetationCD"` trains a local network C_D = f(h, |u|, a), with `input_dim` 3 and `a_bounds` in `UDE_NN_config`. Manning's n stays per zone for the bed.
+- **Order of accuracy:** use second order (the default) for deep, slow vegetated flows. On a sloping bed, first-order hydrostatic reconstruction adds a numerical flux of about √(gh) S dx/2.
+
 **UDE network:** `UDE_NN_config.layernorm` defaults to false. The closure is a local law n_i = f(h_i). `layernorm_axes: "all"` reproduces Julia's non-local LayerNorm.
 
 ## Python API (sketch)

@@ -6,7 +6,9 @@ supports exactly one active parameter group:
 
 * ``ManningN`` -> ``theta["n_zone"]``, one value per material ID 0..n_materials-1 (s/m^(1/3));
 * ``zb``       -> ``theta["zb"]``, one value per cell (m);
-* ``Q``        -> ``theta["Q"]``, one value per inlet-Q boundary (m^3/s).
+* ``Q``        -> ``theta["Q"]``, one value per inlet-Q boundary (m^3/s);
+* ``veg_CD``   -> ``theta["veg_CD"]``, the stem drag coefficient per material ID (-)
+  (extension; needs a ``"vegetation"`` block in the run control).
 
 The initial (inversion) or evaluation (sensitivity) values come either from the run
 control or from a JSON file with the keys of ``_JSON_KEY`` (the format Hydrograd.jl
@@ -30,13 +32,14 @@ logger = logging.getLogger(__name__)
 __all__ = ["THETA_KEY", "active_name", "initial_params", "to_theta"]
 
 # Active parameter name (run control) -> key in the parameter dict theta.
-THETA_KEY = {"ManningN": "n_zone", "zb": "zb", "Q": "Q"}
+THETA_KEY = {"ManningN": "n_zone", "zb": "zb", "Q": "Q", "veg_CD": "veg_CD"}
 
 # Active parameter name -> key in a parameter JSON file ("from_file" option).
 _JSON_KEY = {
     "ManningN": "ManningN_list_param",
     "zb": "zb_cells_param",
     "Q": "inlet_discharges_param",
+    "veg_CD": "veg_CD_list_param",
 }
 
 
@@ -47,7 +50,7 @@ def active_name(case: Case) -> str:
         case: the case (its run control lists ``active_param_names``).
 
     Returns:
-        ``"ManningN"``, ``"zb"`` or ``"Q"``.
+        ``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``.
     """
     names = case.ctrl.opt("active_param_names")
     if len(names) != 1 or names[0] not in THETA_KEY:
@@ -61,13 +64,17 @@ def _expected_len(case: Case, name: str) -> int:
 
     Args:
         case: the case.
-        name: active parameter name (``"ManningN"``, ``"zb"`` or ``"Q"``).
+        name: active parameter name (``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``).
 
     Returns:
-        Number of material zones, cells or inlet-Q boundaries, respectively.
+        Number of material zones, cells, inlet-Q boundaries or material zones.
     """
     m = case.model
-    lengths = {"ManningN": len(m.n_zone), "zb": m.n_cells, "Q": m.n_inlets}
+    if name == "veg_CD" and m.vegetation.mode != "zone":
+        raise ValueError("active parameter veg_CD needs a 'vegetation' block in the run control")
+
+    lengths = {"ManningN": len(m.n_zone), "zb": m.n_cells, "Q": m.n_inlets,
+               "veg_CD": len(m.n_zone)}
     return lengths[name]
 
 
@@ -107,6 +114,7 @@ def initial_params(case: Case, prefix: str) -> tuple[str, Array]:
             "ManningN": f"{prefix}_ManningN_{suffix}",
             "zb": f"{prefix}_zb_{suffix}",
             "Q": f"{prefix}_inlet_discharge_{suffix}",
+            "veg_CD": f"{prefix}_veg_CD_{suffix}",
         }
         p = np.asarray(o(value_keys[name]), dtype=float)
 
@@ -130,7 +138,7 @@ def to_theta(name: str, p: Array) -> dict[str, Any]:
     """Parameter vector -> theta dict for the residual.
 
     Args:
-        name: active parameter name (``"ManningN"``, ``"zb"`` or ``"Q"``).
+        name: active parameter name (``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``).
         p: parameter values, shape [n_params].
 
     Returns:
