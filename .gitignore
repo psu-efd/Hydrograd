@@ -1,0 +1,22 @@
+# Scratch output (large; see CLAUDE.md working conventions)
+temp/
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+*.egg-info/
+# Slurm logs
+hpc/roar/*.out
+# Published papers/reports (not ours to redistribute)
+background/*.pdf
+# User's general Claude Code config (not project code; may hold tokens in settings.json)
+.claude/
+# Secrets
+.env
+.env.*
+settings.json
+*.pem
+*.key

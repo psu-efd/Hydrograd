@@ -1,0 +1,9 @@
+{
+ "cells": 16000,
+ "wall_s": 88.36256701312959,
+ "min_depth_m": 0.0,
+ "max_inundated_pct": 69.9125,
+ "storage_change_m3": 0.4663338171085343,
+ "inflow_volume_m3": 3132000.000170264,
+ "outflow_volume_m3": 3131999.5338364467
+}

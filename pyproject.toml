@@ -1,0 +1,35 @@
+[project]
+name = "hydrograd"
+version = "0.1.0.dev0"
+description = "Differentiable finite-volume solver for the 2D shallow water equations and Universal SWEs (Python/JAX port of Hydrograd.jl)"
+readme = "CLAUDE.md"
+requires-python = ">=3.11"
+authors = [{ name = "Xiaofeng Liu" }]
+dependencies = [
+    "jax>=0.4.30",
+    "diffrax>=0.6",
+    "optax>=0.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+cuda = ["jax[cuda12]"]
+pardiso = ["pypardiso"]   # faster steady (Newton) solves on large meshes
+dev = ["pytest>=8", "matplotlib"]
+
+[project.scripts]
+hydrograd = "hydrograd.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hydrograd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Long tests (> 100 s) are skipped by default; run everything with: pytest -m ""
+addopts = "-m 'not slow'"
+markers = ["slow: long-running test (> 100 s on 8 CPU cores)"]
