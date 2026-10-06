@@ -22,3 +22,5 @@ tests/julia_ref/
 settings.json
 *.pem
 *.key
+# 3D CFD cases (OpenFOAM), kept local; see plan/cfd_vegetation_plan.md
+cfd/
