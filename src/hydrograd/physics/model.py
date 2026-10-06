@@ -104,6 +104,7 @@ class SWEModel:
     scheme: str = "hr_hllc"            # "hr_hllc" (wet/dry, default) or "julia_xi_roe" (Hydrograd.jl)
     order: int = 2                     # spatial order of "hr_hllc": 2 (MUSCL, default) or 1
     limiter: str = "venkatakrishnan"   # order-2 limiter: "venkatakrishnan" (smooth) or "barth_jespersen"
+    dry_smoothing: float = 0.0         # m; > 0 smooths max(h, 0) at wet/dry (implicit Newton robustness)
     fi_ro: Array | None = None      # interior-face midpoint - owner centroid (m), [n_fi, 2]
     fi_rr: Array | None = None      # interior-face midpoint - neighbour centroid (m), [n_fi, 2]
     loss_velocity_eps: float | None = None

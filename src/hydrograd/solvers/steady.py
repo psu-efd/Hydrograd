@@ -85,6 +85,7 @@ def _factorized(M: sp.spmatrix):
     Mc = M.tocsc()
     h = hashlib.blake2b(Mc.data.tobytes(), digest_size=16)
     h.update(Mc.indices.tobytes())
+    h.update(Mc.indptr.tobytes())
     key = h.digest()
     lu = _FACTOR_CACHE.get(key)
     if lu is None:

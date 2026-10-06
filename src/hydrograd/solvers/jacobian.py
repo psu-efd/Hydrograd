@@ -95,15 +95,19 @@ class JacobianPattern:
         return sp.csr_matrix((vals.ravel(), (self.R, self.C)), shape=(N, N))
 
 
-_CACHE: dict[int, JacobianPattern] = {}
+_CACHE: dict[int, tuple[SWEModel, JacobianPattern]] = {}
 
 
 def jacobian_pattern(m: SWEModel) -> JacobianPattern:
-    """Cached pattern per model object."""
-    key = id(m)
-    if key not in _CACHE:
-        _CACHE[key] = JacobianPattern(m)
-    return _CACHE[key]
+    """Cached pattern per model object.
+
+    The entry keeps a reference to its model: ``id`` values are reused after garbage
+    collection, so an id match alone could return another mesh's pattern.
+    """
+    hit = _CACHE.get(id(m))
+    if hit is None or hit[0] is not m:
+        hit = _CACHE[id(m)] = (m, JacobianPattern(m))
+    return hit[1]
 
 
 def linearize(m: SWEModel, theta: dict[str, Any], U: Array, t: Any = None) -> tuple[Array, Array, Array]:
