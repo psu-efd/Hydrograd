@@ -74,6 +74,27 @@ except ImportError:  # pragma: no cover - optional dependency
 PARDISO_MIN_ROWS = 30_000  # below this SciPy's SuperLU is as fast
 
 
+_FACTOR_CACHE: "dict[bytes, Any]" = {}
+_FACTOR_CACHE_SIZE = 4
+
+
+def _factorized(M: sp.spmatrix):
+    """Cached SuperLU factorization of M (keyed by a hash of its values and pattern)."""
+    import hashlib
+
+    Mc = M.tocsc()
+    h = hashlib.blake2b(Mc.data.tobytes(), digest_size=16)
+    h.update(Mc.indices.tobytes())
+    key = h.digest()
+    lu = _FACTOR_CACHE.get(key)
+    if lu is None:
+        lu = spla.splu(Mc)
+        if len(_FACTOR_CACHE) >= _FACTOR_CACHE_SIZE:
+            _FACTOR_CACHE.pop(next(iter(_FACTOR_CACHE)))
+        _FACTOR_CACHE[key] = lu
+    return lu
+
+
 def _sparse_solve(M: sp.spmatrix, B: np.ndarray) -> np.ndarray:
     """Solve M X = B (B: [N] or [N, k]) with one factorization (PARDISO if available).
 
@@ -86,7 +107,7 @@ def _sparse_solve(M: sp.spmatrix, B: np.ndarray) -> np.ndarray:
     try:
         if _pardiso is not None and M.shape[0] >= PARDISO_MIN_ROWS:
             return _pardiso.spsolve(M.tocsr(), np.ascontiguousarray(B))
-        return spla.splu(M.tocsc()).solve(B)
+        return _factorized(M).solve(B)
     except (RuntimeError, ValueError) as e:
         logger.warning("sparse solve failed (%s); returning NaN", e)
         return np.full(np.shape(B), np.nan)
