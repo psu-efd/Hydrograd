@@ -99,7 +99,10 @@ def turbulent_diffusion(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
     neighbour = m.fi_r
     nu_t = eddy_viscosity(m, theta, h, u, v, manning_n)
 
-    # Centroid-to-centroid distance projected on the face normal (m).
+    # Centroid-to-centroid distance projected on the face normal (m). The face-to-centroid
+    # vectors are set by build_model for every model.
+    if m.fi_ro is None or m.fi_rr is None:
+        raise ValueError("turbulent diffusion needs the face-to-centroid vectors fi_ro, fi_rr")
     d_x = m.fi_ro[:, 0] - m.fi_rr[:, 0]
     d_y = m.fi_ro[:, 1] - m.fi_rr[:, 1]
     normal_distance = d_x * m.fi_nx + d_y * m.fi_ny
