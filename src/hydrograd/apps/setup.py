@@ -13,7 +13,8 @@ Pipeline
    w_still (m), and unit discharges q_x, q_y (m^2/s), as in ``process_ICs_2D.jl``.
 5. Flow-resistance model: constant Manning's n per material zone, an n(h, |U|, ks) law,
    or a neural-network closure (UDE mode).
-6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`).
+6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`) and
+   horizontal eddy viscosity (``"turbulence"`` block, see :func:`_turbulence`).
 7. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
    overrides (scheme, spatial order, limiter, checkpointing), and the ODE settings.
 
@@ -51,7 +52,13 @@ from hydrograd.io.control import Control
 from hydrograd.io.srh2d import SRHCase, read_srh_case
 from hydrograd.mesh import Mesh, build_mesh
 from hydrograd.params.manning import ManningLaw
-from hydrograd.physics.model import Resistance, SWEModel, Vegetation, build_model
+from hydrograd.physics.model import (
+    Resistance,
+    SWEModel,
+    Turbulence,
+    Vegetation,
+    build_model,
+)
 from hydrograd.solvers.ode import ODESettings
 
 logger = logging.getLogger(__name__)
@@ -435,6 +442,39 @@ def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
     )
 
 
+def _turbulence(ctrl: Control) -> Turbulence:
+    """Eddy-viscosity settings from the optional ``"turbulence"`` block of the run control.
+
+    Examples::
+
+        "turbulence": {"model": "parabolic", "coefficient": 0.7, "nu0": 1e-6}
+        "turbulence": {"model": "constant", "nu_t": 0.01}
+
+    The parabolic model is nu_t = C_t u_* h + nu_0 (SRH-2D); C_t is differentiable as
+    ``theta["eddy_Ct"]``.
+
+    Args:
+        ctrl: run control.
+
+    Returns:
+        The turbulence settings (mode ``none`` if the block is absent).
+    """
+    block = ctrl.raw.get("turbulence")
+    if not block:
+        return Turbulence()
+
+    model = block.get("model", "parabolic")
+    if model not in ("parabolic", "constant"):
+        raise ValueError(f"turbulence.model must be 'parabolic' or 'constant', got {model!r}")
+
+    return Turbulence(
+        mode=model,
+        coefficient=float(block.get("coefficient", 0.7)),
+        nu0=float(block.get("nu0", 1.0e-6)),
+        nu_constant=float(block.get("nu_t", 0.0)),
+    )
+
+
 def setup_case(ctrl: Control) -> Case:
     """Read all case files and build the model, initial condition and ODE settings.
 
@@ -480,6 +520,11 @@ def setup_case(ctrl: Control) -> Case:
     if vegetation.mode != "none":
         model = dataclasses.replace(model, vegetation=vegetation)
 
+    # Extension: optional horizontal eddy viscosity ("turbulence" block).
+    turbulence = _turbulence(ctrl)
+    if turbulence.mode != "none":
+        model = dataclasses.replace(model, turbulence=turbulence)
+
     # Extension: optional "numerics" block (scheme, spatial_order, limiter, checkpoints,
     # checkpoint_memory_gb).
     num = ctrl.raw.get("numerics", {})
@@ -492,6 +537,9 @@ def setup_case(ctrl: Control) -> Case:
         )
         if model.order not in (1, 2) or (model.order == 2 and model.scheme != "hr_hllc"):
             raise ValueError("numerics: spatial_order 2 is available for scheme 'hr_hllc' only")
+
+    if model.turbulence.mode != "none" and model.scheme != "hr_hllc":
+        raise ValueError("the 'turbulence' block is available for scheme 'hr_hllc' only")
 
     # ------------------------------------------------------------------
     # 4. Initial state U0 = [xi, q_x, q_y] and ODE settings

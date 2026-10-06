@@ -85,6 +85,7 @@ from hydrograd.physics.rhs import (
     manning_n_cells,
     still_depth,
 )
+from hydrograd.physics.turbulence import turbulent_diffusion
 
 __all__ = ["desingularized_velocity", "max_wave_speed", "rhs_hr"]
 
@@ -384,6 +385,11 @@ def rhs_hr(
         + jax.ops.segment_sum(flux_boundary, bcell, m.n_cells)
     )
     dU = -(net_outflow / m.area[:, None]).T
+
+    # Optional horizontal turbulent diffusion div(h nu_t grad u) (explicit part of the
+    # rate; models without a turbulence block skip it and stay bit-identical).
+    if m.turbulence.mode != "none":
+        dU = dU + turbulent_diffusion(m, theta, h, u, v, manning_n)
 
     # ------------------------------------------------------------------
     # 5. Bed friction: -c_f q in the momentum equations

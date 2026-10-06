@@ -44,7 +44,7 @@ from hydrograd.params.manning import ManningLaw
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["UNITS", "Resistance", "SWEModel", "Vegetation", "build_model"]
+__all__ = ["UNITS", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model"]
 
 # GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
 # formula: U = (k_n / n) R^(2/3) S^(1/2).
@@ -120,6 +120,29 @@ class Vegetation:
     h_bounds: tuple[float, float] = (0.0, 1.0)
     umag_bounds: tuple[float, float] = (0.0, 1.0)
     a_bounds: tuple[float, float] = (0.0, 10.0)
+
+
+@dataclass(frozen=True)
+class Turbulence:
+    """Horizontal turbulent diffusion of momentum (depth-averaged eddy viscosity).
+
+    The momentum equations get the term div(h nu_t grad u) (m^2/s^2), with
+
+    - ``parabolic``: nu_t = C_t u_* h + nu_0, where u_* = sqrt(g) n |u| / (k_n h^(1/6)) is
+      the bed friction velocity (m/s) (the SRH-2D parabolic model, C_t = 0.7 by default);
+    - ``constant``: nu_t = ``nu_constant`` + nu_0.
+
+    Attributes:
+        mode: ``none`` (no turbulent diffusion, default), ``parabolic`` or ``constant``.
+        coefficient: C_t of the parabolic model (-); differentiable as ``theta["eddy_Ct"]``.
+        nu0: background (molecular) viscosity nu_0 (m^2/s).
+        nu_constant: eddy viscosity of the ``constant`` model (m^2/s).
+    """
+
+    mode: str = "none"
+    coefficient: float = 0.7
+    nu0: float = 1.0e-6
+    nu_constant: float = 0.0
 
 
 @dataclass(frozen=True, eq=False)
@@ -215,6 +238,7 @@ class SWEModel:
     Q_times: Array | None = None       # time grid (s) when Q is a time series
     WSE_times: Array | None = None     # time grid (s) when WSE is a time series
     vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
+    turbulence: Turbulence = field(default_factory=Turbulence)  # eddy viscosity; none by default
 
     def __hash__(self) -> int:
         """Identity hash, so that a model can be a static argument of ``jax.jit``.
