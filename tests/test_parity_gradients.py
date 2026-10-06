@@ -8,6 +8,7 @@ import re
 
 import jax
 import numpy as np
+import pytest
 from conftest import EXAMPLES, julia_compat, requires_jl
 
 from hydrograd.apps.inversion import run_inversion
@@ -55,7 +56,10 @@ def test_ude_loss_trajectory_matches_julia(case_copy) -> None:
     from hydrograd.apps.ude import save_weights
 
     rel = "UDE/ManningN/oneD_channel_with_bump/training"
-    ref = json.loads((REF / "UDE_ManningN_oneD_channel_with_bump_training.json").read_text())
+    ref_file = REF / "UDE_ManningN_oneD_channel_with_bump_training.json"
+    if not ref_file.exists():
+        pytest.skip(f"no Julia dump {ref_file.name}")
+    ref = json.loads(ref_file.read_text())
     d = case_copy(rel)
     save_weights(d / "julia_init.npz", julia_nn_params(np.asarray(ref["nn_params_flat"]), [3, 3], 1, 1))
     ctrl = json.loads(re.sub(r",(\s*[}\]])", r"\1", (d / "run_control.json").read_text()))
