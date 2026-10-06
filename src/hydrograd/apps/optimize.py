@@ -40,7 +40,7 @@ class OptStage:
     rel_tol: float = 0.0
 
 
-def stages_from_options(o: Callable[[str], Any], prefix: str) -> list[OptStage]:
+def stages_from_options(o: Callable[..., Any], prefix: str) -> list[OptStage]:
     """Read ``<prefix>_optimizers`` and the parallel lists from the run control."""
     names = o(f"{prefix}_optimizers")
     n = len(names)
@@ -110,7 +110,7 @@ def run_stages(make_loss: Callable[[str], LossFn], theta0: Any, stages: Sequence
                 upd, state = opt.update(g, state, th, value=loss, grad=g,
                                         value_fn=lambda t: loss_rev(t)[0])
                 return optax.apply_updates(th, upd), state, loss, aux, g
-            step = jax.jit(lbfgs_step)
+            step: Callable[..., Any] = jax.jit(lbfgs_step)
         else:
             def first_order_step(th: Any, state: Any, opt: optax.GradientTransformation = opt) -> Any:
                 (loss, aux), g = vg(th)

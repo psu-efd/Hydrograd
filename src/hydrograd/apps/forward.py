@@ -34,7 +34,8 @@ from hydrograd.physics.rhs import (
     manning_n_cells,
     still_depth,
 )
-from hydrograd.solvers.final import STEADY_TOL, is_steady, newton_settings
+from hydrograd.solvers.final import STEADY_TOL, implicit_settings, is_implicit, is_steady, newton_settings
+from hydrograd.solvers.implicit import solve_implicit
 from hydrograd.solvers.ode import solve_swe
 from hydrograd.solvers.steady import newton_solve
 
@@ -48,18 +49,19 @@ def derived_fields(m: SWEModel, theta: dict[str, Any], U: np.ndarray, wstill: np
 
     Velocities are ``q/(h + h_small)``; ``h = xi + h_still`` *without* clipping.
     """
-    U = jnp.asarray(U)
+    Uj = jnp.asarray(U)
     hs = still_depth(m, theta)
-    xi, hc, qxc, qyc = clipped_state(m, U, hs)
-    h = np.asarray(U[0] + hs)
+    xi, hc, qxc, qyc = clipped_state(m, Uj, hs)
+    h = np.asarray(Uj[0] + hs)
     n = manning_n_cells(m, theta, hc, qxc, qyc)
     fx, fy = friction(m, theta, hc, qxc, qyc, n)
-    out = {"xi": np.asarray(U[0]), "wstill": wstill, "hstill": np.asarray(hs), "h": h,
-           "wse": np.asarray(U[0]) + wstill, "u": np.asarray(U[1]) / (h + m.h_small),
-           "v": np.asarray(U[2]) / (h + m.h_small), "q_x": np.asarray(U[1]), "q_y": np.asarray(U[2]),
+    out = {"xi": np.asarray(Uj[0]), "wstill": wstill, "hstill": np.asarray(hs), "h": h,
+           "wse": np.asarray(Uj[0]) + wstill, "u": np.asarray(Uj[1]) / (h + m.h_small),
+           "v": np.asarray(Uj[2]) / (h + m.h_small), "q_x": np.asarray(Uj[1]), "q_y": np.asarray(Uj[2]),
            "zb": np.asarray(theta.get("zb", m.zb)), "ManningN": np.asarray(n),
            "friction_x": np.asarray(fx), "friction_y": np.asarray(fy)}
     if m.resistance.mode == "law":
+        assert m.resistance.law is not None
         _, h_ks, f, re = manning_law(m.resistance.law, hc, _safe_speed(qxc, qyc, hc), m.ks)
         out.update(ks=np.asarray(m.ks), h_ks=np.asarray(h_ks), friction_factor=np.asarray(f), Re=np.asarray(re))
     return out
@@ -106,6 +108,13 @@ def run_forward(case: Case) -> dict[str, Any]:
                     int(it), float(rn), wall)
         ys = np.stack([np.asarray(case.U0), np.asarray(U)])
         ts = np.array([s.t0, s.t1])  # IC and steady state
+    elif is_implicit(s):
+        ts_j, ys_j = jax.jit(lambda U0: solve_implicit(m, theta, U0, implicit_settings(s)))(case.U0)
+        ys, ts = np.asarray(ys_j), np.asarray(ts_j)
+        wall = time.perf_counter() - t0
+        if not np.all(np.isfinite(ys)):
+            raise RuntimeError("implicit solve failed (non-finite state); reduce dt. No results written.")
+        logger.info("implicit %s: dt = %g s, %.2f s incl. compile", s.solver, implicit_settings(s).steps()[1], wall)
     else:
         sol = jax.jit(lambda U0: solve_swe(m, theta, U0, s))(case.U0)
         ys, ts = np.asarray(sol.ys), np.asarray(sol.ts)

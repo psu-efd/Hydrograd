@@ -175,7 +175,9 @@ def _solver(name: str) -> dfx.AbstractSolver:
     if name not in _SOLVERS:
         logger.warning("ODE solver %s not available; using Tsit5()", name)
         name = "Tsit5()"
-    return _SOLVERS[name]()
+    cls = _SOLVERS[name]
+    assert cls is not None
+    return cls()
 
 
 def n_checkpoints(s: ODESettings, U0: Array) -> int:
@@ -201,7 +203,8 @@ def solve_swe(m: SWEModel, theta: dict[str, Any], U0: Array, s: ODESettings,
     """
     if ts is None:
         ts = jnp.linspace(s.t0, s.t1, s.n_save + 1)
-    term = dfx.ODETerm(lambda t, y, args: rhs(m, args, y, None, t))
+    term = dfx.ODETerm(lambda t, y, args: rhs(m, args, y, None, t))  # type: ignore[arg-type]
+    ctrl: dfx.AbstractStepSizeController
     if s.solver == "SSPRK3()":
         from hydrograd.physics.rhs_hr import max_wave_speed
         perim = (jax.ops.segment_sum(m.fi_L, m.fi_o, m.n_cells) + jax.ops.segment_sum(m.fi_L, m.fi_r, m.n_cells)

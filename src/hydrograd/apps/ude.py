@@ -45,7 +45,7 @@ from hydrograd.apps.sensitivity import DERIV_RTOL
 from hydrograd.apps.setup import Case
 from hydrograd.closures.mlp import init_mlp
 from hydrograd.io.output import write_csv, write_json
-from hydrograd.solvers.final import final_state, is_steady
+from hydrograd.solvers.final import final_state, reverse_only
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ SEED = 1111
 
 def save_weights(path: Path, params: list[dict[str, Any]]) -> None:
     """Save MLP weights to ``.npz`` (keys ``<layer>_<name>``)."""
-    np.savez(path, **{f"{i}_{k}": np.asarray(v) for i, layer in enumerate(params) for k, v in layer.items()})
+    np.savez(path, **{f"{i}_{k}": np.asarray(v) for i, layer in enumerate(params) for k, v in layer.items()})  # type: ignore[arg-type]
 
 
 def load_weights(path: Path) -> list[dict[str, Any]]:
@@ -102,7 +102,7 @@ def run_ude(case: Case) -> dict[str, Any]:
     truth = load_truth(json.loads((d / o("UDE_truth_file_name")).read_text()))
     ode_o = o("UDE_ode_solver_options")
     fwd = use_forward_mode(o("UDE_sensealg"), ode_o.get("ode_solver_sensealg", ""), n_par) \
-        and not is_steady(case.ode)   # steady IFT gradients are reverse mode
+        and not reverse_only(case.ode)   # steady / implicit IFT gradients are reverse mode
     b_wse, b_uv = bool(o("UDE_bWSE_loss")), bool(o("UDE_b_uv_loss"))
     logger.info("UDE training with %s-mode gradients", "forward" if fwd else "reverse")
 

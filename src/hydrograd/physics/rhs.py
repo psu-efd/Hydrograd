@@ -67,6 +67,7 @@ def manning_n_cells(m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Array) -
     """Manning's n per cell (s/m^(1/3)); zone values for ``nn_FlowResistance``."""
     r = m.resistance
     if r.mode == "law":
+        assert r.law is not None
         return manning_law(r.law, h, _safe_speed(qx, qy, h), m.ks)[0]
     if r.mode == "nn_ManningN_h":
         x = normalize(h, *r.h_bounds)[:, None]

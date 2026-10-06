@@ -23,6 +23,10 @@ limiting (Venkatakrishnan, smooth, default; or Barth-Jespersen) at interior face
 faces), hydrostatic reconstruction on the face states (z_f = eta_f - h_f), and the centred
 bed source of Audusse & Bristeau (2005). Use cfl <= 0.25 for wet/dry runs.
 
+``SWEModel.dry_smoothing`` = delta > 0 replaces the state-dependent max(., 0) (cell depth and
+reconstructed face depths) by (x + sqrt(x^2 + delta^2))/2: G becomes smooth for Newton in the
+implicit scheme at wet fronts, at the price of a film of ~delta/2 on dry cells (default 0).
+
 Depth thresholds enter only through velocities: u = sqrt(2) h q / sqrt(h^4 +
 max(h^4, eps^4)) (Kurganov & Petrova 2007) with eps = h_small, so u -> 0 as h -> 0
 without clipping depth or mass. Friction and Manning laws use the same velocities,
@@ -54,9 +58,16 @@ def desingularized_velocity(h: Array, q: Array, eps: float) -> Array:
     return SQRT2 * h * q / jnp.sqrt(h4 + jnp.maximum(h4, eps ** 4))
 
 
+def _pos(x: Array, delta: float) -> Array:
+    """max(x, 0), or its smooth version (x + sqrt(x^2 + delta^2))/2 when delta > 0."""
+    if delta > 0.0:
+        return 0.5 * (x + jnp.sqrt(x * x + delta * delta))
+    return jnp.maximum(x, 0.0)
+
+
 def _cell_state(m: SWEModel, theta: Theta, U: Array):
     hs = still_depth(m, theta)
-    h = jnp.maximum(U[0] + hs, 0.0)
+    h = _pos(U[0] + hs, m.dry_smoothing)
     u = desingularized_velocity(h, U[1], m.h_small)
     v = desingularized_velocity(h, U[2], m.h_small)
     return hs, h, u, v
@@ -74,17 +85,21 @@ def _muscl_states(m: SWEModel, h: Array, zb: Array, u: Array, v: Array):
     """Limited face states (owner side, neighbour side) of h, z = eta - h, u, v.
 
     The free surface eta = h + z (not z) is reconstructed, so a lake at rest stays flat.
-    Cells that are dry or touch a dry cell are kept first order.
+    Cells near dry cells blend continuously to first order (see below).
     """
     from hydrograd.physics.reconstruct import limited_face_values
 
     n = m.n_cells
-    dry = (h <= m.h_small).astype(h.dtype)
-    near_dry = jnp.maximum(dry, jnp.maximum(jax.ops.segment_max(dry[m.fi_r], m.fi_o, n),
-                                            jax.ops.segment_max(dry[m.fi_o], m.fi_r, n))) > 0
+    # Continuous blend to first order near dry cells: weight w = ramp of the smallest depth
+    # among the cell and its face neighbours, 0 at h <= h_small, 1 at h >= 10 h_small. Dry
+    # neighbours still give pure first order (positivity), but the residual stays continuous,
+    # which Newton (implicit and steady solves) needs at moving wet fronts.
+    hmin = jnp.minimum(h, jnp.minimum(jax.ops.segment_min(h[m.fi_r], m.fi_o, n),
+                                      jax.ops.segment_min(h[m.fi_o], m.fi_r, n)))
+    w = jnp.clip((hmin - m.h_small) / (9.0 * m.h_small), 0.0, 1.0)
     # One batched pass for the four fields (gradients, neighbour ranges and limiters vectorized).
     Q = jnp.stack([h, h + zb, u, v])
-    QL, QR = jax.vmap(lambda q: limited_face_values(m, q, near_dry, m.limiter))(Q)
+    QL, QR = jax.vmap(lambda q: limited_face_values(m, q, w, m.limiter))(Q)
     hL, eL, uL, vL = QL
     hR, eR, uR, vR = QR
     # Venkatakrishnan may overshoot local bounds slightly: keep reconstructed depths >= 0.
@@ -112,8 +127,8 @@ def rhs_hr(m: SWEModel, theta: Theta, U: Array, K: Array | None = None, split: b
     else:
         hL_, hR_, zL, zR, uL, uR, vL, vR = h[o], h[r], zb[o], zb[r], u[o], u[r], v[o], v[r]
     zf = jnp.maximum(zL, zR)
-    hLs = jnp.maximum(hL_ + zL - zf, 0.0)
-    hRs = jnp.maximum(hR_ + zR - zf, 0.0)
+    hLs = _pos(hL_ + zL - zf, m.dry_smoothing)
+    hRs = _pos(hR_ + zR - zf, m.dry_smoothing)
     Fh, Fx, Fy, _ = _face_flux(hLs, uL, vL, hRs, uR, vR, m.fi_nx, m.fi_ny, g)
     cL = 0.5 * g * (hL_ ** 2 - hLs ** 2)
     cR = 0.5 * g * (hR_ ** 2 - hRs ** 2)

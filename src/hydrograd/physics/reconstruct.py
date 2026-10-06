@@ -67,12 +67,14 @@ def limited_face_values(m: SWEModel, q: Array, first_order: Array,
     Args:
         m: model (needs ``fi_ro``, ``fi_rr``: midpoint minus owner/neighbour centroid, m).
         q: cell values [n_cells].
-        first_order: bool [n_cells]; True forces phi = 0 (e.g. near dry cells).
+        first_order: weight in [0, 1] per cell multiplying the limiter (0 = first order,
+            e.g. next to dry cells), or a bool array (True = first order).
         limiter: ``venkatakrishnan`` or ``barth_jespersen``; K: Venkatakrishnan constant.
 
     Returns:
         (q at the face from the owner side, q from the neighbour side), each [n_interior_faces].
     """
+    assert m.fi_ro is not None and m.fi_rr is not None
     g = green_gauss(m, q)
     qmin, qmax = _neighbour_range(m, q)
     o, r = m.fi_o, m.fi_r
@@ -86,5 +88,8 @@ def limited_face_values(m: SWEModel, q: Array, first_order: Array,
         f_o = _venkat(d_o, q[o], qmin[o], qmax[o], eps2[o])
         f_r = _venkat(d_r, q[r], qmin[r], qmax[r], eps2[r])
     phi = jnp.minimum(jax.ops.segment_min(f_o, o, n), jax.ops.segment_min(f_r, r, n))
-    phi = jnp.where(first_order, 0.0, jnp.clip(phi, 0.0, 1.0))
+    if first_order.dtype == jnp.bool_:
+        phi = jnp.where(first_order, 0.0, jnp.clip(phi, 0.0, 1.0))
+    else:
+        phi = first_order * jnp.clip(phi, 0.0, 1.0)
     return q[o] + phi[o] * d_o, q[r] + phi[r] * d_r

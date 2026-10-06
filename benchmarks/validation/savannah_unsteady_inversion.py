@@ -7,8 +7,12 @@ WSE at N_GAUGES cells along the reach every 10 min (optionally noisy). Unknowns:
 1-5 (zone 0 has no cells), start 0.03. Inversion model: implicit backward Euler (dt = 30 s,
 per-step IFT adjoints); optimizer: L-BFGS (optax, zoom line search).
 
-Usage: python savannah_unsteady_inversion.py JL_CASE_DIR OUT_DIR [NOISE_MM] [N_ITER]
+Usage: python savannah_unsteady_inversion.py JL_CASE_DIR OUT_DIR [NOISE_MM] [N_ITER] [GAUGES] [DT] [N0]
 (JL_CASE_DIR: Hydrograd.jl examples/SWE_2D/forward_simulation/Savannah_River; it is copied.)
+GAUGES: "bins" (default; deepest cell in each of N_GAUGES streamwise bins, which puts 5 of 6
+gauges in the main-channel zone 3) or "zones" (GAUGES_PER_ZONE cells of median depth per zone,
+spread along x, so every roughness zone is observed). DT: implicit step (s), default 30.
+N0: initial n in every zone, default 0.03 (multi-start studies).
 """
 import json, shutil, sys, time
 from pathlib import Path
@@ -28,6 +32,7 @@ T_END = 6.0 * 3600.0
 DT_OBS = 600.0
 DT_IMPLICIT = 30.0
 N_GAUGES = 6
+GAUGES_PER_ZONE = 2
 T_HYD = np.array([0.0, 0.5, 2.0, 4.5, 6.0]) * 3600.0
 Q_HYD = np.array([187.4, 187.4, 450.0, 187.4, 187.4])
 
@@ -47,10 +52,32 @@ def prepare(src: Path, d: Path) -> None:
     (d / "run_control.json").write_text(json.dumps(c, indent=1))
 
 
+def pick_gauges(h0: np.ndarray, x: np.ndarray, zone: np.ndarray, layout: str) -> list[int]:
+    """Gauge cell indices.
+
+    Args:
+        h0: initial depth per cell (m); x: streamwise centroid coordinate (m);
+        zone: material id per cell; layout: "bins" or "zones" (see module docstring).
+    """
+    if layout == "bins":
+        edges = np.quantile(x, np.linspace(0.05, 0.95, N_GAUGES + 1))
+        return [int(np.flatnonzero((x >= a) & (x < b))[np.argmax(h0[(x >= a) & (x < b)])])
+                for a, b in zip(edges[:-1], edges[1:])]
+    out = []
+    for k in np.unique(zone):
+        cells = np.flatnonzero(zone == k)
+        for part in np.array_split(cells[np.argsort(x[cells])], GAUGES_PER_ZONE):  # spread along x
+            out.append(int(part[np.argmin(np.abs(h0[part] - np.median(h0[part])))]))
+    return out
+
+
 def main():
     src, out = Path(sys.argv[1]), Path(sys.argv[2])
     noise_mm = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
     n_iter = int(sys.argv[4]) if len(sys.argv) > 4 else 30
+    layout = sys.argv[5] if len(sys.argv) > 5 else "bins"
+    dt_impl = float(sys.argv[6]) if len(sys.argv) > 6 else DT_IMPLICIT
+    n0 = float(sys.argv[7]) if len(sys.argv) > 7 else 0.03
     out.mkdir(parents=True, exist_ok=True)
     d = out / "case"
     if not d.exists():
@@ -60,12 +87,8 @@ def main():
     n_true = np.asarray(m.n_zone)
     t_obs = jnp.arange(0.0, T_END + 1.0, DT_OBS)
 
-    # Gauges: the deepest cell in each of N_GAUGES bins along the main flow direction (x).
     h0 = np.asarray(case.U0[0] + m.hstill)
-    x = case.mesh.centroid[:, 0]
-    edges = np.quantile(x, np.linspace(0.05, 0.95, N_GAUGES + 1))
-    gauge = jnp.asarray([int(np.flatnonzero((x >= a) & (x < b))[np.argmax(h0[(x >= a) & (x < b)])])
-                         for a, b in zip(edges[:-1], edges[1:])])
+    gauge = jnp.asarray(pick_gauges(h0, case.mesh.centroid[:, 0], np.asarray(m.mat_id), layout))
 
     t0 = time.perf_counter()
     sol = jax.jit(lambda: solve_swe(m, {}, case.U0, case.ode, ts=t_obs))()
@@ -74,7 +97,7 @@ def main():
           f"{int(sol.stats['num_steps'])} steps; stage rise {np.round(obs.max(0) - obs[0], 2)} m", flush=True)
     obs = jnp.asarray(obs + noise_mm * 1e-3 * np.random.default_rng(0).normal(size=obs.shape))
 
-    si = ImplicitSettings(0.0, T_END, DT_IMPLICIT, theta=1.0, n_save=len(t_obs) - 1, tol=1e-8)
+    si = ImplicitSettings(0.0, T_END, dt_impl, theta=1.0, n_save=len(t_obs) - 1, tol=1e-8)
     zones = jnp.arange(1, len(n_true))                    # zone 0 has no cells
 
     def stages(n_zone):
@@ -86,7 +109,7 @@ def main():
         L = jnp.mean((stages(n_zone) - obs) ** 2)
         return jnp.where(jnp.isfinite(L), L, 1.0e6)
 
-    p = jnp.log(jnp.full(len(zones), 0.03))
+    p = jnp.log(jnp.full(len(zones), n0))
     vg = jax.jit(jax.value_and_grad(loss))
     opt = optax.lbfgs(linesearch=optax.scale_by_zoom_linesearch(max_linesearch_steps=8))
     state = opt.init(p)
@@ -109,7 +132,8 @@ def main():
                "n_true": n_true[1:].tolist(), "n_inverted": n_inv.tolist(),
                "n_rel_error": (np.abs(n_inv - n_true[1:]) / n_true[1:]).tolist(),
                "final_rms_stage_misfit_mm": float(np.sqrt(hist[-1]) * 1000), "loss_history": hist,
-               "gauge_cells": np.asarray(gauge).tolist()}
+               "gauge_cells": np.asarray(gauge).tolist(), "gauge_layout": layout,
+               "dt_implicit_s": dt_impl, "n0": n0}
     (out / f"summary_noise{noise_mm:g}mm.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: v for k, v in summary.items() if k != "loss_history"}), flush=True)
 

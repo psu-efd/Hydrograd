@@ -59,6 +59,10 @@ class ImplicitSettings:
         theta: implicitness (1 = backward Euler, 0.5 = Crank-Nicolson).
         newton_iter: maximum damped-Newton iterations per step.
         tol: Newton tolerance on max|G| (m and m^2/s per step).
+        refresh_ratio: the Newton Jacobian is formed at U^n and re-formed only after an
+            iteration whose residual reduction max|G|_new / max|G|_old exceeds this ratio
+            (chord-type reuse; 0 = re-form every iteration). The factorization of a reused
+            Jacobian is cached on the host. The adjoint always uses the exact Jacobian at U^{n+1}.
         accept_tol, max_halvings: a step whose Newton residual stays above ``accept_tol`` is
             redone as two half steps, recursively at most ``max_halvings`` times (default 0:
             fixed steps). Halving makes forward runs robust at advancing wet fronts, but the
@@ -77,6 +81,7 @@ class ImplicitSettings:
     newton_iter: int = 30
     tol: float = 1.0e-8
     accept_tol: float = 1.0e-6
+    refresh_ratio: float = 0.3
     clip_depth: bool = False
     max_halvings: int = 0
     n_save: int = 1
@@ -105,7 +110,7 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, b: 
 def _solve(m: SWEModel, lin, b: Array, a: Array, transpose: bool) -> Array:
     out = jax.ShapeDtypeStruct(b.shape, jnp.float64)
     return jax.pure_callback(lambda c, A, C, v, s: _host_solve(m, c, A, C, v, s, transpose),
-                             out, *lin, b, a)
+                             out, *lin, b, a, vmap_method="sequential")
 
 
 def _newton_step(m: SWEModel, s: ImplicitSettings, theta: Theta, U0: Array, t0: Array,
@@ -133,19 +138,25 @@ def _newton_step(m: SWEModel, s: ImplicitSettings, theta: Theta, U0: Array, t0: 
         return U.at[0].set(jnp.maximum(U[0], xi_min))
 
     def cond(c):
-        _, it, gn = c
+        _, it, gn, _, _ = c
         return (gn > s.tol) & (it < s.newton_iter)
 
     def body(c):
-        U, it, _ = c
-        dU = _solve(m, linearize(m, theta, U, t1), -G(U), a, transpose=False)
+        U, it, gn, lin, refresh = c
+        lin = jax.lax.cond(refresh, lambda _: linearize(m, theta, U, t1), lambda _: lin, None)
+        dU = _solve(m, lin, -G(U), a, transpose=False)
         cands = jax.vmap(lambda al: clip(U + al * dU))(alphas)
         norms = jax.vmap(lambda V: jnp.max(jnp.abs(G(V))))(cands)
         norms = jnp.where(jnp.isfinite(norms), norms, jnp.inf)
         k = jnp.argmin(norms)
-        return cands[k], it + 1, norms[k]
+        # Chord-type reuse: refresh the Jacobian only when the residual fell by less than
+        # ``refresh_ratio`` (always when s.refresh_ratio >= 1).
+        refresh_next = norms[k] > s.refresh_ratio * gn
+        return cands[k], it + 1, norms[k], lin, refresh_next
 
-    U, _, gn = jax.lax.while_loop(cond, body, (U0, jnp.asarray(0), jnp.max(jnp.abs(G(U0)))))
+    lin0 = linearize(m, theta, U0, t1)
+    U, _, gn, _, _ = jax.lax.while_loop(
+        cond, body, (U0, jnp.asarray(0), jnp.max(jnp.abs(G(U0))), lin0, jnp.asarray(False)))
     return U, gn
 
 

@@ -14,6 +14,8 @@ hpc/roar/*.out
 background/*.pdf
 # User's general Claude Code config (not project code; may hold tokens in settings.json)
 .claude/
+# Julia reference dumps and their generator scripts (kept local; regenerate on Roar)
+tests/julia_ref/
 # Secrets
 .env
 .env.*

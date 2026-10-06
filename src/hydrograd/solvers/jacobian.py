@@ -77,12 +77,12 @@ class JacobianPattern:
                 seeds[3 * c + k, k, self.color == c] = 1.0
         self.seeds = seeds  # NumPy: the pattern is cached across traces, so no JAX arrays here
         # Expansion of each cell-pair nonzero into its 3x3 block (row comp kk, col comp k).
-        kk, k = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")
-        self.R = (kk[None] * self.n + self.rows[:, None, None]).ravel()
-        self.C = (k[None] * self.n + self.cols[:, None, None]).ravel()
+        kr, kc = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")   # row / column component
+        self.R = (kr[None] * self.n + self.rows[:, None, None]).ravel()
+        self.C = (kc[None] * self.n + self.cols[:, None, None]).ravel()
         cj = self.color[self.cols]
-        # comp[3 cj + k, kk, i] is J[(kk, i), (k, j)]
-        self._gather = (3 * cj[:, None, None] + k[None], kk[None], self.rows[:, None, None])
+        # comp[3 cj + kc, kr, i] is J[(kr, i), (kc, j)]
+        self._gather = (3 * cj[:, None, None] + kc[None], kr[None], self.rows[:, None, None])
 
     def compressed(self, f: Callable[[Array], Array], U: Array) -> Array:
         """JVPs of f at U along all seeds, shape [3 n_colors, 3, n] (JAX-traceable)."""
@@ -95,15 +95,19 @@ class JacobianPattern:
         return sp.csr_matrix((vals.ravel(), (self.R, self.C)), shape=(N, N))
 
 
-_CACHE: dict[int, JacobianPattern] = {}
+_CACHE: dict[int, tuple[SWEModel, JacobianPattern]] = {}
 
 
 def jacobian_pattern(m: SWEModel) -> JacobianPattern:
-    """Cached pattern per model object."""
-    key = id(m)
-    if key not in _CACHE:
-        _CACHE[key] = JacobianPattern(m)
-    return _CACHE[key]
+    """Cached pattern per model object.
+
+    The entry keeps a reference to its model: ``id`` values are reused after garbage
+    collection, so an id match alone could return another mesh's pattern.
+    """
+    hit = _CACHE.get(id(m))
+    if hit is None or hit[0] is not m:
+        hit = _CACHE[id(m)] = (m, JacobianPattern(m))
+    return hit[1]
 
 
 def linearize(m: SWEModel, theta: dict[str, Any], U: Array, t: Any = None) -> tuple[Array, Array, Array]:
