@@ -33,7 +33,7 @@ from hydrograd.apps.params import initial_params, to_theta
 from hydrograd.apps.sensitivity import DERIV_RTOL
 from hydrograd.apps.setup import Case
 from hydrograd.io.output import write_csv, write_json
-from hydrograd.solvers.final import final_state, is_steady
+from hydrograd.solvers.final import final_state, reverse_only
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def run_inversion(case: Case) -> dict[str, Any]:
     w = _weights(o)
     ode_o = o("inversion_ode_solver_options")
     fwd = use_forward_mode(o("inversion_sensealg"), ode_o.get("ode_solver_sensealg", ""), len(p0)) \
-        and not is_steady(case.ode)   # steady IFT gradients are reverse mode
+        and not reverse_only(case.ode)   # steady / implicit IFT gradients are reverse mode
     logger.info("inversion of %s with %s-mode gradients", name, "forward" if fwd else "reverse")
 
     def make_loss(adjoint: str):

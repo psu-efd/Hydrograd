@@ -52,6 +52,7 @@ hydrograd run            # dispatches on bPerform_Forward_Simulation / _Inversio
 - `Tsit5()`, `Euler()` and `RK4()`, as in Julia.
 - `SSPRK3()`: wet/dry runs. CFL-limited steps, positivity-preserving, point-implicit friction.
 - `SteadyNewton()`: steady state by Newton with implicit-function-theorem gradients. Requires the wet extent not to change during the solve.
+- `BackwardEuler()` / `CrankNicolson()`: implicit θ-scheme with a fixed step `time_settings.dt` (tens of seconds) and per-step IFT gradients (reverse mode). Best for long, slowly varying, mostly wet events; large steps at fast-advancing wet fronts can fail.
 
 **Time series:** `IQParams` and `EWSParamsC` in `.srhhydro` accept an SMS/SRH-2D `.xys` file (times in hours) in place of a number. The series are differentiable, so hydrographs can be inverted.
 

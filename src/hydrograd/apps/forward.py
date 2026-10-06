@@ -34,7 +34,8 @@ from hydrograd.physics.rhs import (
     manning_n_cells,
     still_depth,
 )
-from hydrograd.solvers.final import STEADY_TOL, is_steady, newton_settings
+from hydrograd.solvers.final import STEADY_TOL, implicit_settings, is_implicit, is_steady, newton_settings
+from hydrograd.solvers.implicit import solve_implicit
 from hydrograd.solvers.ode import solve_swe
 from hydrograd.solvers.steady import newton_solve
 
@@ -107,6 +108,13 @@ def run_forward(case: Case) -> dict[str, Any]:
                     int(it), float(rn), wall)
         ys = np.stack([np.asarray(case.U0), np.asarray(U)])
         ts = np.array([s.t0, s.t1])  # IC and steady state
+    elif is_implicit(s):
+        ts_j, ys_j = jax.jit(lambda U0: solve_implicit(m, theta, U0, implicit_settings(s)))(case.U0)
+        ys, ts = np.asarray(ys_j), np.asarray(ts_j)
+        wall = time.perf_counter() - t0
+        if not np.all(np.isfinite(ys)):
+            raise RuntimeError("implicit solve failed (non-finite state); reduce dt. No results written.")
+        logger.info("implicit %s: dt = %g s, %.2f s incl. compile", s.solver, implicit_settings(s).steps()[1], wall)
     else:
         sol = jax.jit(lambda U0: solve_swe(m, theta, U0, s))(case.U0)
         ys, ts = np.asarray(sol.ys), np.asarray(sol.ts)

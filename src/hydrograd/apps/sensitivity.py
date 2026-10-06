@@ -24,7 +24,7 @@ import numpy as np
 from hydrograd.apps.params import initial_params, to_theta
 from hydrograd.apps.setup import Case
 from hydrograd.io.output import write_json, write_vtk
-from hydrograd.solvers.final import final_state, is_steady
+from hydrograd.solvers.final import final_state, is_implicit, is_steady
 from hydrograd.solvers.ode import solve_swe
 from hydrograd.solvers.steady import steady_jacobian
 
@@ -59,6 +59,10 @@ def final_state_jacobian(case: Case, name: str, p: jax.Array) -> dict[str, Any]:
     # are controlled to the nominal tolerance; diffrax controls only the primal error.
     # A tighter tolerance gives comparable derivative accuracy (validated vs Julia: ~1e-5).
     m = case.model
+    if is_implicit(case.ode):
+        raise NotImplementedError("sensitivity analysis uses forward-mode Jacobians; the implicit "
+                                  "theta-scheme has reverse-mode (IFT) gradients only. Use SSPRK3() "
+                                  "or SteadyNewton(), or jax.jacrev on solve_implicit.")
     if is_steady(case.ode):  # steady state: dU*/dp = -J^{-1} dR/dp (one sparse LU)
         t0 = time.perf_counter()
         U, ok = jax.jit(lambda p: final_state(m, to_theta(name, p), case.U0, case.ode))(p)

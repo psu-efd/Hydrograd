@@ -74,3 +74,20 @@ def test_implicit_ift_gradient_matches_finite_differences(tmp_path) -> None:
     e = jnp.zeros_like(q0).at[0, 1].set(0.05)
     fd = (float(L(q0 + e)) - float(L(q0 - e))) / 0.1
     assert abs(g[0, 1] - fd) <= 2e-3 * abs(fd)
+
+
+def test_backward_euler_selectable_from_run_control(tmp_path) -> None:
+    """ode_solver = "BackwardEuler()" through the forward app (frames, outputs) vs explicit."""
+    from hydrograd.apps.forward import run_forward
+
+    tq = np.linspace(0.0, 600.0, 5)
+    out = {}
+    for solver, dt in (("SSPRK3()", 0.1), ("BackwardEuler()", 20.0)):
+        d = tmp_path / solver.strip("()")
+        write_channel_case(d, H.NX, H.NY, length=H.L, width=H.W, n_manning=H.N_MAN, zb_fn=H.bed, wstill=0.0,
+                           inlet="INLET-Q", outlet="EXIT-H", dt=dt, solver=solver, t_end=600.0, n_save=2,
+                           wse_out=1.03, Q_series=(tq, H.q_true(tq)), ic_wse=lambda x, y: H.S0 * (H.L - x) + 1.03)
+        res = run_forward(setup_case(read_control(d / "run_control.json")))
+        assert len(res["ts"]) == 3 and (d / "forward_simulation_results_0003.vtk").exists()
+        out[solver] = res["fields"]["wse"]
+    assert np.abs(out["BackwardEuler()"] - out["SSPRK3()"]).max() < 0.02
