@@ -74,6 +74,17 @@ ts, ys = solve_implicit(case.model, {"Q": q}, case.U0,              # implicit b
 # jax.grad of any loss of ys w.r.t. theta ({"n_zone", "zb", "Q", "WSE", "nn"}) works with every solver.
 ```
 
+## Backend choice: JAX over PyTorch
+
+PyTorch and JAX were both prototyped (`benchmarks/backend/`) and benchmarked on the same residual, meshes and hardware before the package was written. Full results are in `plan/backend_benchmark_report.md`.
+
+- **Speed:** on an NVIDIA A100 in float64, JAX was faster than `torch.compile` at every mesh size from 2k to 512k cells. Forward runs were 1.2–5× faster and reverse-mode gradients 2–11× faster.
+- **Savannah River:** a 10,000-step gradient took 4.5 s with JAX against 57.5 s with PyTorch.
+- **Why:** XLA compiles the whole time loop (`lax.scan`) into one program, while PyTorch pays a per-step Python dispatch cost, most of all in the checkpointed backward pass.
+- **Solver tools:** JAX's `custom_vjp`, `jvp`/`vmap` and checkpointing support the implicit-function-theorem adjoints and the colored sparse Jacobians. Those are what the steady and implicit solvers are built on.
+
+The package therefore uses JAX only. Peak GPU memory was similar for both backends.
+
 ## Validation (details in `plan/`)
 
 - **Parity with Hydrograd.jl:**
