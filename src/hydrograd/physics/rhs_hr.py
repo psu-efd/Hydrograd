@@ -79,7 +79,12 @@ from jax import Array
 from hydrograd.bed import bed_slope  # noqa: F401  (kept for API symmetry)
 from hydrograd.physics.hllc import hllc_flux
 from hydrograd.physics.model import KIND_INLET, SWEModel
-from hydrograd.physics.rhs import _ghosts, friction_coefficient, manning_n_cells, still_depth
+from hydrograd.physics.rhs import (
+    _ghosts,
+    friction_coefficient,
+    manning_n_cells,
+    still_depth,
+)
 
 __all__ = ["desingularized_velocity", "max_wave_speed", "rhs_hr"]
 

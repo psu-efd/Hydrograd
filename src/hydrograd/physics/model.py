@@ -1,12 +1,31 @@
 """Static description of one SWE problem: mesh arrays, BCs, ICs, resistance model.
 
-``SWEModel`` holds everything that is *not* differentiated (JAX constants), plus
-default values for the quantities that can become parameters (bed ``zb``, zone
-Manning's n, inlet discharges, exit WSEs). The residual takes a parameter
-dictionary ``theta`` that may override any of those defaults:
+Purpose
+-------
+``SWEModel`` holds everything that is *not* differentiated (JAX constants): mesh
+connectivity and geometry, boundary-face kinds, the bed, the still-water level and the
+resistance model. It also holds default values for the quantities that can become
+parameters: the bed elevation ``zb``, the Manning's n of each zone, the inlet discharges
+and the exit water-surface elevations (WSEs).
+
+Parameter dictionary
+--------------------
+The residual takes a parameter dictionary ``theta`` that may override any of those
+defaults:
 
     theta = {"zb": [n_cells], "n_zone": [n_materials], "Q": [n_inlets],
              "WSE": [n_exits], "nn": <MLP pytree>}
+
+Mesh arrays
+-----------
+Interior faces (prefix ``fi_``) connect an owner cell o and a neighbour cell r; the unit
+normal (nx, ny) points from o to r. Boundary faces (prefix ``fb_``) belong to one cell and
+carry a boundary kind (wall, inlet-Q, exit-H, symmetry). All indices are 0-based.
+
+Units
+-----
+Units follow the mesh: SI (m, s, g = 9.81 m/s^2, k_n = 1) in all Hydrograd.jl examples,
+or US customary (ft, s, g = 32.2 ft/s^2, k_n = 1.486) for ``GridUnit = "EN"``.
 """
 
 from __future__ import annotations
@@ -27,9 +46,17 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["UNITS", "Resistance", "SWEModel", "build_model"]
 
-# GridUnit -> (unit system, k_n, g (length/s^2))
+# GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
+# formula: U = (k_n / n) R^(2/3) S^(1/2).
 UNITS = {"SI": ("SI", 1.0, 9.81), "EN": ("EN", 1.486, 32.2)}
-KIND_WALL, KIND_INLET, KIND_EXIT, KIND_SYMM = 0, 1, 2, 3
+
+# Integer codes of the boundary-face kinds (stored in ``SWEModel.fb_kind``).
+KIND_WALL = 0
+KIND_INLET = 1
+KIND_EXIT = 2
+KIND_SYMM = 3
+
+# SRH-2D boundary type names -> kind codes.
 _KINDS = {"WALL": KIND_WALL, "INLET-Q": KIND_INLET, "EXIT-H": KIND_EXIT, "SYMM": KIND_SYMM}
 
 
@@ -66,6 +93,49 @@ class SWEModel:
     """Static arrays of the semi-discrete SWE problem (all JAX arrays, 0-based).
 
     Units follow the mesh (SI in all Hydrograd.jl examples): lengths m, time s.
+    n_fi is the number of interior faces, n_fb the number of boundary faces.
+
+    Attributes:
+        n_cells: number of cells.
+        g: gravitational acceleration (m/s^2).
+        k_n: unit factor of Manning's formula (1 in SI, 1.486 in EN).
+        h_small: dry threshold depth (m).
+        area: cell areas (m^2), [n_cells].
+        fi_o, fi_r: owner and neighbour cell of each interior face, [n_fi].
+        fi_nx, fi_ny: unit normal of each interior face, from owner to neighbour, [n_fi].
+        fi_L: interior face lengths (m), [n_fi].
+        fb_c: cell of each boundary face, [n_fb].
+        fb_nx, fb_ny: outward unit normal of each boundary face, [n_fb].
+        fb_L: boundary face lengths (m), [n_fb].
+        fb_kind: boundary kind code (``KIND_*``) of each boundary face, [n_fb].
+        fb_inlet: index into theta["Q"] per boundary face (0 for non-inlet faces), [n_fb].
+        fb_exit: index into theta["WSE"] per boundary face (0 for non-exit faces), [n_fb].
+        n_inlets, n_exits: number of inlet-Q and exit-H boundaries.
+        bed: index arrays for bed face values and slopes.
+        zb: default bed elevation at cells (m), [n_cells].
+        S0: bed slope of ``zb`` (-), [n_cells, 2].
+        hstill: still-water depth h_still = w_still - zb (m), [n_cells].
+        wstill: still-water surface elevation (m), [n_cells].
+        mat_id: material (zone) ID per cell, [n_cells].
+        ks: roughness height per cell (m), [n_cells]; zeros if unused.
+        n_zone: default Manning's n per material ID (s/m^(1/3)), [n_materials].
+        Q: inlet discharges (m^3/s), sorted BC-ID order: [n_in] or [n_in, n_t].
+        WSE: exit WSEs (m), sorted BC-ID order: [n_ex] or [n_ex, n_t].
+        inlet_ids, exit_ids: SRH-2D boundary IDs of the inlets and exits, sorted.
+        resistance: the bed-resistance model.
+        inlet_split: how Q is split over inlet faces: "conveyance" (L h^(5/3)/n) or
+            "julia" (L^(5/3) h/n, Hydrograd.jl).
+        scheme: "hr_hllc" (wet/dry, default) or "julia_xi_roe" (Hydrograd.jl).
+        order: spatial order of "hr_hllc": 2 (MUSCL, default) or 1.
+        limiter: order-2 limiter: "venkatakrishnan" (smooth) or "barth_jespersen".
+        dry_smoothing: smoothing width (m); > 0 smooths max(h, 0) at wet/dry fronts
+            (robustness of the implicit Newton solve).
+        fi_ro: interior-face midpoint minus owner centroid (m), [n_fi, 2].
+        fi_rr: interior-face midpoint minus neighbour centroid (m), [n_fi, 2].
+        loss_velocity_eps: eps (m) in u = q/(h + eps) in the losses; None -> h_small
+            (as in the truth files).
+        Q_times: time grid (s) when Q is a time series, [n_t].
+        WSE_times: time grid (s) when WSE is a time series, [n_t].
     """
 
     n_cells: int
@@ -100,18 +170,23 @@ class SWEModel:
     inlet_ids: tuple[int, ...] = ()
     exit_ids: tuple[int, ...] = ()
     resistance: Resistance = field(default_factory=Resistance)
-    inlet_split: str = "conveyance"   # "conveyance" (L h^(5/3)/n) or "julia" (L^(5/3) h/n)
-    scheme: str = "hr_hllc"            # "hr_hllc" (wet/dry, default) or "julia_xi_roe" (Hydrograd.jl)
+    inlet_split: str = "conveyance"    # "conveyance" (L h^(5/3)/n) or "julia" (L^(5/3) h/n)
+    scheme: str = "hr_hllc"            # "hr_hllc" (wet/dry, default) or "julia_xi_roe"
     order: int = 2                     # spatial order of "hr_hllc": 2 (MUSCL, default) or 1
-    limiter: str = "venkatakrishnan"   # order-2 limiter: "venkatakrishnan" (smooth) or "barth_jespersen"
-    dry_smoothing: float = 0.0         # m; > 0 smooths max(h, 0) at wet/dry (implicit Newton robustness)
-    fi_ro: Array | None = None      # interior-face midpoint - owner centroid (m), [n_fi, 2]
-    fi_rr: Array | None = None      # interior-face midpoint - neighbour centroid (m), [n_fi, 2]
-    loss_velocity_eps: float | None = None
-    Q_times: Array | None = None     # time grid (s) when Q is a time series
-    WSE_times: Array | None = None   # time grid (s) when WSE is a time series  # u = q/(h + eps) in losses; None -> h_small (as in truth files)
+    limiter: str = "venkatakrishnan"   # order-2 limiter: "venkatakrishnan" or "barth_jespersen"
+    dry_smoothing: float = 0.0         # m; > 0 smooths max(h, 0) at wet/dry fronts
+    fi_ro: Array | None = None         # interior-face midpoint - owner centroid (m), [n_fi, 2]
+    fi_rr: Array | None = None         # interior-face midpoint - neighbour centroid (m)
+    loss_velocity_eps: float | None = None  # u = q/(h + eps) in losses; None -> h_small
+    Q_times: Array | None = None       # time grid (s) when Q is a time series
+    WSE_times: Array | None = None     # time grid (s) when WSE is a time series
 
     def __hash__(self) -> int:
+        """Identity hash, so that a model can be a static argument of ``jax.jit``.
+
+        Returns:
+            ``id(self)``.
+        """
         return id(self)
 
 
@@ -120,15 +195,36 @@ def _boundary_values(values: dict, ids: tuple[int, ...]) -> tuple[np.ndarray, np
 
     If any boundary has a series, all are sampled on the union of the series times
     (exact for piecewise-linear series; constants are repeated).
+
+    Args:
+        values: boundary ID -> a number or a ``TimeSeries`` (m^3/s for Q, m for WSE).
+        ids: boundary IDs in the order wanted (sorted).
+
+    Returns:
+        (values, times): values of shape [n_boundaries] when all are constant (times is
+        then None), or of shape [n_boundaries, n_times] sampled on the time grid
+        ``times`` (s), shape [n_times].
     """
     from hydrograd.io.srh2d import TimeSeries
 
+    # All boundaries constant: one value per boundary, no time grid.
     series = [values[i] for i in ids if isinstance(values[i], TimeSeries)]
     if not series:
-        return np.array([float(values[i]) for i in ids], dtype=float), None
+        constants = [float(values[i]) for i in ids]
+        return np.array(constants, dtype=float), None
+
+    # Common time grid: the union of all series times.
     grid = np.unique(np.concatenate([ts.t for ts in series]))
-    rows = [np.interp(grid, values[i].t, values[i].v) if isinstance(values[i], TimeSeries)
-            else np.full(len(grid), float(values[i])) for i in ids]
+
+    # Sample each boundary on the grid (series are interpolated, constants repeated).
+    rows = []
+    for i in ids:
+        if isinstance(values[i], TimeSeries):
+            row = np.interp(grid, values[i].t, values[i].v)
+        else:
+            row = np.full(len(grid), float(values[i]))
+        rows.append(row)
+
     return np.stack(rows), grid
 
 
@@ -140,49 +236,103 @@ def build_model(mesh: Mesh, zb_cells: np.ndarray, wstill: np.ndarray, mat_id: np
 
     Args:
         mesh: the mesh (its ``bc_types`` define the boundary kinds).
-        zb_cells: bed elevation at cells (m).
-        wstill: still-water surface elevation at cells (m), from the IC.
-        mat_id: material ID per cell.
-        n_zone: Manning's n per material ID 0..n_materials-1.
+        zb_cells: bed elevation at cells (m), shape [n_cells].
+        wstill: still-water surface elevation at cells (m), from the IC, shape [n_cells].
+        mat_id: material ID per cell, shape [n_cells].
+        n_zone: Manning's n per material ID 0..n_materials-1 (s/m^(1/3)).
         inlet_Q: inlet-Q boundary ID -> total discharge (m^3/s), a number or a TimeSeries.
         exit_WSE: exit-H boundary ID -> water-surface elevation (m), a number or a TimeSeries.
         resistance: friction model.
-        ks_cells: roughness height per cell (m), for ``h_Umag_ks`` laws.
+        ks_cells: roughness height per cell (m), for ``h_Umag_ks`` laws, shape [n_cells].
         unit_system: ``SI`` or ``EN`` (sets g and k_n).
         h_small: dry threshold depth (m).
+
+    Returns:
+        The assembled model.
+
+    Raises:
+        ValueError: on an unsupported boundary type, or a material ID without a Manning's n.
     """
     _, k_n, g = UNITS[unit_system]
+
+    # Interior faces have a neighbour cell (index >= 0); boundary faces do not.
     inner = mesh.neigh >= 0
     bfaces, bids = mesh.boundary_arrays()
+
+    # Inlet-Q and exit-H boundary IDs, sorted; they index theta["Q"] and theta["WSE"].
     inlet_ids = tuple(sorted(i for i, t in mesh.bc_types.items() if t == "INLET-Q"))
     exit_ids = tuple(sorted(i for i, t in mesh.bc_types.items() if t == "EXIT-H"))
+
+    # Check the inputs.
     bad = sorted({t for t in mesh.bc_types.values() if t not in _KINDS})
     if bad:
-        raise ValueError(f"unsupported boundary condition type(s) {bad}; supported: {sorted(_KINDS)}")
+        raise ValueError(
+            f"unsupported boundary condition type(s) {bad}; supported: {sorted(_KINDS)}"
+        )
     if int(np.max(mat_id)) >= len(n_zone):
-        raise ValueError(f"material ID {int(np.max(mat_id))} has no Manning's n ({len(n_zone)} zones given)")
+        raise ValueError(
+            f"material ID {int(np.max(mat_id))} has no Manning's n ({len(n_zone)} zones given)"
+        )
+
+    # Per boundary face: kind code, and position of its boundary in theta["Q"] / ["WSE"].
     kind = np.array([_KINDS[mesh.bc_types[b]] for b in bids])
     inlet_pos = {b: k for k, b in enumerate(inlet_ids)}
     exit_pos = {b: k for k, b in enumerate(exit_ids)}
-    Qv, Qt = _boundary_values(inlet_Q, inlet_ids)
-    Wv, Wt = _boundary_values(exit_WSE, exit_ids)
+    fb_inlet = np.array([inlet_pos.get(b, 0) for b in bids])
+    fb_exit = np.array([exit_pos.get(b, 0) for b in bids])
+
+    # Boundary values: constants, or series sampled on a common time grid.
+    Q_values, Q_times = _boundary_values(inlet_Q, inlet_ids)
+    WSE_values, WSE_times = _boundary_values(exit_WSE, exit_ids)
+
+    # Bed geometry and the default bed elevation.
     bed = BedGeometry(mesh)
     zb = jnp.asarray(zb_cells, dtype=jnp.float64)
-    j = lambda a: jnp.asarray(a)
+
+    # Roughness heights (zeros when no law uses them).
+    ks = ks_cells if ks_cells is not None else np.zeros(mesh.n_cells)
+
+    # Vectors from the owner / neighbour centroid to the interior-face midpoint (MUSCL).
+    owner_inner = mesh.owner[inner]
+    neigh_inner = mesh.neigh[inner]
+    fi_ro = mesh.midpoint[inner] - mesh.centroid[owner_inner]
+    fi_rr = mesh.midpoint[inner] - mesh.centroid[neigh_inner]
+
     return SWEModel(
-        n_cells=mesh.n_cells, g=g, k_n=k_n, h_small=h_small, area=j(mesh.area),
-        fi_o=j(mesh.owner[inner]), fi_r=j(mesh.neigh[inner]),
-        fi_nx=j(mesh.normal[inner, 0]), fi_ny=j(mesh.normal[inner, 1]), fi_L=j(mesh.length[inner]),
-        fb_c=j(mesh.owner[bfaces]), fb_nx=j(mesh.normal[bfaces, 0]), fb_ny=j(mesh.normal[bfaces, 1]),
-        fb_L=j(mesh.length[bfaces]), fb_kind=j(kind),
-        fb_inlet=j(np.array([inlet_pos.get(b, 0) for b in bids])),
-        fb_exit=j(np.array([exit_pos.get(b, 0) for b in bids])),
-        n_inlets=len(inlet_ids), n_exits=len(exit_ids), bed=bed, zb=zb, S0=bed_slope(bed, zb),
-        hstill=j(wstill - zb_cells), wstill=j(wstill), mat_id=j(mat_id),
-        ks=j(ks_cells if ks_cells is not None else np.zeros(mesh.n_cells)),
-        n_zone=j(np.asarray(n_zone, dtype=float)),
-        Q=j(Qv), WSE=j(Wv),
-        inlet_ids=inlet_ids, exit_ids=exit_ids, resistance=resistance,
-        Q_times=None if Qt is None else j(Qt), WSE_times=None if Wt is None else j(Wt),
-        fi_ro=j(mesh.midpoint[inner] - mesh.centroid[mesh.owner[inner]]),
-        fi_rr=j(mesh.midpoint[inner] - mesh.centroid[mesh.neigh[inner]]))
+        n_cells=mesh.n_cells,
+        g=g,
+        k_n=k_n,
+        h_small=h_small,
+        area=jnp.asarray(mesh.area),
+        fi_o=jnp.asarray(owner_inner),
+        fi_r=jnp.asarray(neigh_inner),
+        fi_nx=jnp.asarray(mesh.normal[inner, 0]),
+        fi_ny=jnp.asarray(mesh.normal[inner, 1]),
+        fi_L=jnp.asarray(mesh.length[inner]),
+        fb_c=jnp.asarray(mesh.owner[bfaces]),
+        fb_nx=jnp.asarray(mesh.normal[bfaces, 0]),
+        fb_ny=jnp.asarray(mesh.normal[bfaces, 1]),
+        fb_L=jnp.asarray(mesh.length[bfaces]),
+        fb_kind=jnp.asarray(kind),
+        fb_inlet=jnp.asarray(fb_inlet),
+        fb_exit=jnp.asarray(fb_exit),
+        n_inlets=len(inlet_ids),
+        n_exits=len(exit_ids),
+        bed=bed,
+        zb=zb,
+        S0=bed_slope(bed, zb),
+        hstill=jnp.asarray(wstill - zb_cells),
+        wstill=jnp.asarray(wstill),
+        mat_id=jnp.asarray(mat_id),
+        ks=jnp.asarray(ks),
+        n_zone=jnp.asarray(np.asarray(n_zone, dtype=float)),
+        Q=jnp.asarray(Q_values),
+        WSE=jnp.asarray(WSE_values),
+        inlet_ids=inlet_ids,
+        exit_ids=exit_ids,
+        resistance=resistance,
+        Q_times=None if Q_times is None else jnp.asarray(Q_times),
+        WSE_times=None if WSE_times is None else jnp.asarray(WSE_times),
+        fi_ro=jnp.asarray(fi_ro),
+        fi_rr=jnp.asarray(fi_rr),
+    )
