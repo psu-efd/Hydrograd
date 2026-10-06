@@ -72,11 +72,13 @@ def final_state_jacobian(case: Case, name: str, p: jax.Array) -> dict[str, Any]:
 
     def final_flat(p: jax.Array) -> jax.Array:
         sol = solve_swe(m, to_theta(name, p), case.U0, s)
+        assert sol.ys is not None
         return sol.ys[-1].reshape(-1)
 
     t0 = time.perf_counter()
     J = _chunked_jacfwd(final_flat, p, JVP_CHUNK)
     sol = jax.jit(lambda p: solve_swe(m, to_theta(name, p), case.U0, s))(p)
+    assert sol.ys is not None
     logger.info("sensitivity Jacobian %s computed in %.2f s", J.shape, time.perf_counter() - t0)
     return {"J": J, "ys": np.asarray(sol.ys)}
 

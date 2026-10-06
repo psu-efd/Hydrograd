@@ -77,12 +77,12 @@ class JacobianPattern:
                 seeds[3 * c + k, k, self.color == c] = 1.0
         self.seeds = seeds  # NumPy: the pattern is cached across traces, so no JAX arrays here
         # Expansion of each cell-pair nonzero into its 3x3 block (row comp kk, col comp k).
-        kk, k = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")
-        self.R = (kk[None] * self.n + self.rows[:, None, None]).ravel()
-        self.C = (k[None] * self.n + self.cols[:, None, None]).ravel()
+        kr, kc = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")   # row / column component
+        self.R = (kr[None] * self.n + self.rows[:, None, None]).ravel()
+        self.C = (kc[None] * self.n + self.cols[:, None, None]).ravel()
         cj = self.color[self.cols]
-        # comp[3 cj + k, kk, i] is J[(kk, i), (k, j)]
-        self._gather = (3 * cj[:, None, None] + k[None], kk[None], self.rows[:, None, None])
+        # comp[3 cj + kc, kr, i] is J[(kr, i), (kc, j)]
+        self._gather = (3 * cj[:, None, None] + kc[None], kr[None], self.rows[:, None, None])
 
     def compressed(self, f: Callable[[Array], Array], U: Array) -> Array:
         """JVPs of f at U along all seeds, shape [3 n_colors, 3, n] (JAX-traceable)."""

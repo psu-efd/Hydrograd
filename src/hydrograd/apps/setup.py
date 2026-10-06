@@ -130,7 +130,9 @@ def _resistance(ctrl: Control, mat_id: np.ndarray) -> tuple[Resistance, Any]:
     if ctrl.mode == "ude":
         choice = ctrl.opt("UDE_choice")
         nn = ctrl.opt("UDE_NN_config")
-        b = lambda k: tuple(float(v) for v in nn.get(k, (0.0, 1.0)))
+        def b(k: str) -> tuple[float, float]:
+            lo, hi = nn.get(k, (0.0, 1.0))
+            return float(lo), float(hi)
         ks = None
         if choice == "ManningN_h_Umag_ks":
             ks = _ks_cells(ctrl.opt("UDE_ManningN_function_parameters")["ks"], mat_id)

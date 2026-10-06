@@ -110,8 +110,8 @@ def read_srhhydro(path: str | Path) -> SRHHydro:
     manning: dict[int, float] = {}
     bc: dict[int, str] = {}
     monitoring: list[int] = []
-    iq: dict[int, tuple[float, str, str]] = {}
-    ews: dict[int, tuple[float, str, str]] = {}
+    iq: dict[int, tuple[float | TimeSeries, str, str]] = {}
+    ews: dict[int, tuple[float | TimeSeries, str, str]] = {}
     for line in path.read_text().splitlines():
         parts = line.split()
         if len(parts) <= 1:

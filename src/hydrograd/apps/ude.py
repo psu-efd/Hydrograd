@@ -56,7 +56,7 @@ SEED = 1111
 
 def save_weights(path: Path, params: list[dict[str, Any]]) -> None:
     """Save MLP weights to ``.npz`` (keys ``<layer>_<name>``)."""
-    np.savez(path, **{f"{i}_{k}": np.asarray(v) for i, layer in enumerate(params) for k, v in layer.items()})
+    np.savez(path, **{f"{i}_{k}": np.asarray(v) for i, layer in enumerate(params) for k, v in layer.items()})  # type: ignore[arg-type]
 
 
 def load_weights(path: Path) -> list[dict[str, Any]]:

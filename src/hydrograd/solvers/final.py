@@ -41,4 +41,5 @@ def final_state(m: SWEModel, theta: dict[str, Any], U0: Array, s: ODESettings) -
         ok = jnp.max(jnp.abs(rhs(m, theta, U))) < STEADY_TOL
         return U, ok
     sol = solve_swe(m, theta, U0, s)
-    return sol.ys[-1], sol.result == dfx.RESULTS.successful
+    assert sol.ys is not None
+    return sol.ys[-1], jnp.asarray(sol.result == dfx.RESULTS.successful)

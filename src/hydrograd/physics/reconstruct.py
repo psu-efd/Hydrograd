@@ -73,6 +73,7 @@ def limited_face_values(m: SWEModel, q: Array, first_order: Array,
     Returns:
         (q at the face from the owner side, q from the neighbour side), each [n_interior_faces].
     """
+    assert m.fi_ro is not None and m.fi_rr is not None
     g = green_gauss(m, q)
     qmin, qmax = _neighbour_range(m, q)
     o, r = m.fi_o, m.fi_r

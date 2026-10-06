@@ -48,18 +48,19 @@ def derived_fields(m: SWEModel, theta: dict[str, Any], U: np.ndarray, wstill: np
 
     Velocities are ``q/(h + h_small)``; ``h = xi + h_still`` *without* clipping.
     """
-    U = jnp.asarray(U)
+    Uj = jnp.asarray(U)
     hs = still_depth(m, theta)
-    xi, hc, qxc, qyc = clipped_state(m, U, hs)
-    h = np.asarray(U[0] + hs)
+    xi, hc, qxc, qyc = clipped_state(m, Uj, hs)
+    h = np.asarray(Uj[0] + hs)
     n = manning_n_cells(m, theta, hc, qxc, qyc)
     fx, fy = friction(m, theta, hc, qxc, qyc, n)
-    out = {"xi": np.asarray(U[0]), "wstill": wstill, "hstill": np.asarray(hs), "h": h,
-           "wse": np.asarray(U[0]) + wstill, "u": np.asarray(U[1]) / (h + m.h_small),
-           "v": np.asarray(U[2]) / (h + m.h_small), "q_x": np.asarray(U[1]), "q_y": np.asarray(U[2]),
+    out = {"xi": np.asarray(Uj[0]), "wstill": wstill, "hstill": np.asarray(hs), "h": h,
+           "wse": np.asarray(Uj[0]) + wstill, "u": np.asarray(Uj[1]) / (h + m.h_small),
+           "v": np.asarray(Uj[2]) / (h + m.h_small), "q_x": np.asarray(Uj[1]), "q_y": np.asarray(Uj[2]),
            "zb": np.asarray(theta.get("zb", m.zb)), "ManningN": np.asarray(n),
            "friction_x": np.asarray(fx), "friction_y": np.asarray(fy)}
     if m.resistance.mode == "law":
+        assert m.resistance.law is not None
         _, h_ks, f, re = manning_law(m.resistance.law, hc, _safe_speed(qxc, qyc, hc), m.ks)
         out.update(ks=np.asarray(m.ks), h_ks=np.asarray(h_ks), friction_factor=np.asarray(f), Re=np.asarray(re))
     return out

@@ -96,8 +96,8 @@ def write_channel_case(case_dir: str | Path, nx: int, ny: int, length: float = 1
     elif inlet == "INLET-Q":
         hydro.append(f"IQParams 1 {Q} SI CONVEYANCE")
     if outlet == "EXIT-H" and WSE_series is not None:
-        ts, ws = WSE_series
-        rows = [f"{t / 3600.0:.17g} {w:.17g}" for t, w in zip(ts, ws)]
+        stage_t, stage_v = WSE_series
+        rows = [f"{t / 3600.0:.17g} {w:.17g}" for t, w in zip(stage_t, stage_v)]
         (d / "stage.xys").write_text(f'XY 1 {len(rows)} 0 0 0 0 0 0 "stage"\n' + "\n".join(rows) + "\n")
         hydro.append("EWSParamsC 2 stage.xys SI C")
     elif outlet == "EXIT-H":
@@ -106,7 +106,7 @@ def write_channel_case(case_dir: str | Path, nx: int, ny: int, length: float = 1
     cells = np.arange(1, nx * ny + 1)
     (d / "channel.srhmat").write_text("SRHMAT 30\nNMaterials 2\nMatName 1 \"channel\"\nMaterial 1 "
                                       + _fmt_ids(cells) + "\n")
-    ws = wse_out if wstill is None else wstill
+    ws: float = wse_out if wstill is None else wstill
     ic_opts = {"forward_simulation_initial_condition_options": "constant",
                "forward_simulation_initial_condition_constant_values": [wse_out, ws, 0.0, 0.0]}
     if ic_wse is not None:
