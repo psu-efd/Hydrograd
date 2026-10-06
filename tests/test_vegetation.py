@@ -19,6 +19,9 @@ friction rate. The tests check:
    ``theta["veg_CD"]`` (implicit-function-theorem adjoint) matches finite differences.
 4. The network closure C_D = f(h, |u|, a) is local: the drag rate of cell i depends on
    the depth of cell i only.
+5. The force integrated over a region (``vegetation_force``) equals the analytic stem drag
+   rho 1/2 C_D a q^2 / h_n per unit area in uniform flow, and its gradient with respect to
+   C_D through the steady solve matches central differences.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ from hydrograd.io.control import read_control
 from hydrograd.io.synthetic import write_channel_case
 from hydrograd.physics.model import Vegetation
 from hydrograd.physics.rhs import friction_coefficient
-from hydrograd.physics.vegetation import vegetation_drag_rate
+from hydrograd.physics.vegetation import vegetation_drag_rate, vegetation_force
 from hydrograd.solvers.final import final_state
 
 # Channel and vegetation of the uniform-flow tests (SI units).
@@ -226,3 +229,37 @@ def test_network_drag_coefficient_is_local(tmp_path) -> None:
     off_diagonal = jacobian - np.diag(np.diag(jacobian))
     assert np.max(np.abs(off_diagonal)) == 0.0
     assert np.min(np.abs(np.diag(jacobian))) > 0.0
+
+
+def test_region_force_in_uniform_flow(tmp_path) -> None:
+    """Force on the downstream half of the channel: analytic value (0.5%) and FD gradient."""
+    # Setup: the normal-depth channel; region = cells in the middle half of the channel
+    # (away from the inlet and exit, where the flow is uniform).
+    h_normal = _normal_depth()
+    _write_vegetated_channel(tmp_path, wse_out=h_normal, h_initial=h_normal)
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+    x = case.mesh.centroid[:, 0]
+    in_region = (x > 0.25 * LENGTH) & (x < 0.75 * LENGTH)
+    weights = jnp.asarray(in_region.astype(float))[None, :]
+    region_area = float(np.sum(np.asarray(model.area)[in_region]))
+
+    def region_force_x(CD_values: jax.Array) -> jax.Array:
+        """Streamwise vegetation force (N) on the region for C_D per material."""
+        U, _ = final_state(model, {"veg_CD": CD_values}, case.U0, case.ode)
+        return vegetation_force(model, {"veg_CD": CD_values}, U, weights)[0, 0]
+
+    # Run: force at the true C_D, its gradient, and central differences.
+    CD_zone = jnp.full(len(model.n_zone), CD)
+    force = float(region_force_x(CD_zone))
+    gradient = float(jax.grad(region_force_x)(CD_zone)[1])
+    step = 1e-4
+    plus = region_force_x(CD_zone.at[1].add(step))
+    minus = region_force_x(CD_zone.at[1].add(-step))
+    finite_difference = float((plus - minus) / (2.0 * step))
+
+    # Compare: analytic force rho 1/2 C_D a q^2 / h_n times the region area.
+    q = Q_TOTAL / WIDTH
+    expected = 1000.0 * 0.5 * CD * A_FRONTAL * q ** 2 / h_normal * region_area
+    np.testing.assert_allclose(force, expected, rtol=5e-3)
+    np.testing.assert_allclose(gradient, finite_difference, rtol=1e-4)

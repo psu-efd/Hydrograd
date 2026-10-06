@@ -33,6 +33,16 @@ Parameterizations of C_D
 The frontal-area density a is a property of the vegetation (one value per material zone);
 it can also be made a parameter, ``theta["veg_a"]``.
 
+Forces on regions
+-----------------
+:func:`vegetation_force` integrates the drag over regions of cells (a patch, or a row of
+stems inside a patch):
+
+    F_region = rho sum_(cells i) w_i 1/2 C_D a h |u| u  A_i          (N)
+
+with the region weights w_i (1 inside, 0 outside) and the cell areas A_i. It is
+differentiable, so measured or simulated (CFD) forces can enter a calibration loss.
+
 Units: the formula is dimensionally consistent, so it holds in SI and in US customary units.
 """
 
@@ -47,7 +57,7 @@ from hydrograd.closures.mlp import apply_mlp, normalize
 from hydrograd.physics.model import SWEModel
 from hydrograd.physics.roe import smooth_sqrt
 
-__all__ = ["vegetation_drag_coefficient", "vegetation_drag_rate"]
+__all__ = ["vegetation_drag_coefficient", "vegetation_drag_rate", "vegetation_force"]
 
 # Differentiable parameters, e.g. {"veg_CD": ..., "veg_a": ..., "nn": ...}.
 Theta = dict[str, Any]
@@ -112,3 +122,42 @@ def vegetation_drag_rate(m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Arr
     # Drag coefficient and rate.
     CD = vegetation_drag_coefficient(m, theta, h, speed, a)
     return 0.5 * CD * a * speed
+
+
+def vegetation_force(
+    m: SWEModel,
+    theta: Theta,
+    U: Array,
+    region_weights: Array,
+    rho: float = 1000.0,
+) -> Array:
+    """Drag force of the vegetation on the flow, integrated over regions of cells.
+
+    Args:
+        m: the model (``vegetation`` settings, cell areas, still-water depth).
+        theta: differentiable parameters (``veg_CD``, ``veg_a``, ``nn``, ``zb``).
+        U: state [xi, q_x, q_y], shape [3, n_cells].
+        region_weights: weight of every cell in every region (1 inside, 0 outside),
+            shape [n_regions, n_cells].
+        rho: water density (kg/m^3).
+
+    Returns:
+        Force (N) on each region, x and y components, shape [n_regions, 2].
+    """
+    # Depth h = xi + h_still (m), clipped at zero, and floored at h_small inside the drag
+    # law as in the residual.
+    h_still = m.wstill - theta["zb"] if "zb" in theta else m.hstill
+    h = jnp.maximum(U[0] + h_still, 0.0)
+    h_floor = jnp.maximum(h, m.h_small)
+    qx = U[1]
+    qy = U[2]
+
+    # Drag per unit plan area divided by the density: c_veg q (m^2/s^2).
+    rate = vegetation_drag_rate(m, theta, h_floor, qx, qy)
+    drag_x = rate * qx * m.area
+    drag_y = rate * qy * m.area
+
+    # Sum over the cells of each region and convert to newtons.
+    force_x = region_weights @ drag_x
+    force_y = region_weights @ drag_y
+    return rho * jnp.stack([force_x, force_y], axis=1)
