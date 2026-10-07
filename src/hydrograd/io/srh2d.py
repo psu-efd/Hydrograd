@@ -211,12 +211,16 @@ def read_srhhydro(path: str | Path) -> SRHHydro:
 
         elif key == "IQParams":
             # IQParams <ID> <Q or .xys file> <unit> [<distribution type>]
+            if len(vals) < 3:
+                raise ValueError(f"{path.name}: 'IQParams' needs <ID> <Q> <unit>, got {vals}")
             q_value = _value_or_series(vals[1], path.parent)
             distribution = vals[3] if len(vals) > 3 else ""
             iq[int(vals[0])] = (q_value, vals[2], distribution)
 
         elif key == "EWSParamsC":
             # EWSParamsC <ID> <WSE or .xys file> <unit> [<type>]
+            if len(vals) < 3:
+                raise ValueError(f"{path.name}: 'EWSParamsC' needs <ID> <WSE> <unit>, got {vals}")
             wse_value = _value_or_series(vals[1], path.parent)
             wse_type = vals[3] if len(vals) > 3 else ""
             ews[int(vals[0])] = (wse_value, vals[2], wse_type)
@@ -229,6 +233,9 @@ def read_srhhydro(path: str | Path) -> SRHHydro:
     sim_time = [float(v) for v in sim_time_tokens]
 
     # Names of the mesh and material files (may contain spaces and quotes).
+    for required in ("Grid", "HydroMat"):
+        if required not in raw:
+            raise ValueError(f"{path.name}: missing the '{required}' line")
     grid_file = _strip(" ".join(raw["Grid"]))
     mat_file = _strip(" ".join(raw["HydroMat"]))
 
