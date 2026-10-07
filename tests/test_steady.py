@@ -80,7 +80,12 @@ def test_sparse_jacobian_is_exact(case_copy, rel: str) -> None:
 
 @pytest.mark.parametrize("rel", CASES)
 def test_newton_converges(case_copy, rel: str) -> None:
-    """Newton reaches a residual norm below 1e-10 in fewer than 100 iterations."""
+    """Newton reaches a residual norm below 1e-10 in fewer than 150 iterations.
+
+    The bump channel needs about 106 pseudo-transient Newton iterations with the Manning
+    law of the default scheme (91 with Hydrograd.jl's (h + h_small) depth offset, which
+    the default scheme no longer uses; report section 4n).
+    """
     case = _steady_case(case_copy, rel)
     settings = newton_settings(case.ode)
 
@@ -88,7 +93,7 @@ def test_newton_converges(case_copy, rel: str) -> None:
     U, n_iterations, residual_norm = jax.jit(
         lambda U0: newton_solve(case.model, {}, U0, settings)
     )(case.U0)
-    assert float(residual_norm) < 1e-10 and int(n_iterations) < 100
+    assert float(residual_norm) < 1e-10 and int(n_iterations) < 150
 
 
 def test_ift_gradient_and_sensitivity_match_finite_differences(case_copy) -> None:

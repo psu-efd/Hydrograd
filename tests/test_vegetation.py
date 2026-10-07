@@ -9,9 +9,9 @@ friction rate. The tests check:
 2. Uniform open-channel flow through vegetation: the steady solution has the normal depth
    h_n of the analytic momentum balance
 
-       g h S = c(h) q,   c(h) = g n^2 |q| / (h + h_small)^(7/3) + 1/2 C_D a |q| / h,
+       g h S = c(h) q,   c(h) = g n^2 |q| / h_eff^(7/3) + 1/2 C_D a |q| / h,
 
-   (the h_small offset is the one used in the code's Manning term). Second-order
+   with the Manning law of the default scheme, h_eff = sqrt(h^2 + h_small^2). Second-order
    reconstruction (the default) is used: on a sloping bed, first-order hydrostatic
    reconstruction adds a numerical flux of about sqrt(g h) S dx / 2, which for this deep,
    slow flow (Fr ~ 0.01) lowers the cell discharge by 5% at dx = 5 m (error O(dx)).
@@ -52,7 +52,6 @@ N_MANNING = 0.02        # s/m^(1/3)
 A_FRONTAL = 2.0         # 1/m (e.g. d = 0.01 m stems at dS = 0.07 m)
 CD = 1.0                # -
 G = 9.81                # m/s^2
-H_SMALL = 1.0e-3        # m, the model's dry threshold
 
 
 def _write_vegetated_channel(case_dir, wse_out: float, h_initial: float) -> None:
@@ -100,7 +99,8 @@ def _normal_depth(with_stems: bool = True) -> float:
 
     def balance(h: float) -> float:
         """Gravity minus resistance (m^2/s^2) per unit plan area at depth h (m)."""
-        c_bed = G * N_MANNING ** 2 * q / (h + H_SMALL) ** (7.0 / 3.0)
+        h_eff = np.sqrt(h * h + 1.0e-6)          # smooth floor of the default scheme
+        c_bed = G * N_MANNING ** 2 * q / h_eff ** (7.0 / 3.0)
         c_veg = stem_factor * 0.5 * CD * A_FRONTAL * q / h
         return G * h * SLOPE - (c_bed + c_veg) * q
 

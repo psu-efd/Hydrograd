@@ -226,8 +226,18 @@ def _bed_friction_coefficient(
         tau = apply_mlp(theta["nn"], x, r.activations, *r.out_bounds, r.ln_axes)[:, 0]
         return tau / q_mag
 
-    # Manning: c = g n^2 |q| / (k_n^2 (h + h_small)^(7/3)).
-    return m.g * n * n / m.k_n ** 2 / (h + m.h_small) ** (7.0 / 3.0) * q_mag
+    # Manning: c = g n^2 |q| / (k_n^2 h_eff^(7/3)).
+    # - hr_hllc: smooth depth floor h_eff = sqrt(h^2 + h_small^2). The relative friction
+    #   error in wet cells is about 7/6 (h_small / h)^2 (1e-5 at h = 0.3 m), and near-dry
+    #   cells stay bounded and smooth for Newton (h_eff -> h_small as h -> 0).
+    # - julia_xi_roe: Hydrograd.jl's (h + h_small)^(7/3), kept for parity. It lowers the
+    #   friction by about 7/3 h_small / h in wet cells (0.8% at h = 0.3 m).
+    if m.scheme == "julia_xi_roe":
+        depth_term = (h + m.h_small) ** (7.0 / 3.0)
+    else:
+        h_eff = jnp.sqrt(h * h + m.h_small * m.h_small)
+        depth_term = h_eff ** (7.0 / 3.0)
+    return m.g * n * n / m.k_n ** 2 / depth_term * q_mag
 
 
 def friction(
