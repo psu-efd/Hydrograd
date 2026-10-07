@@ -38,6 +38,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
+from hydrograd.apps.force_data import force_loss, load_force_data
 from hydrograd.apps.forward import derived_fields, write_frame_vtk
 from hydrograd.apps.losses import (
     LossWeights,
@@ -123,6 +124,9 @@ def run_inversion(case: Case) -> dict[str, Any]:
     truth = load_truth(json.loads((d / o("inversion_truth_file_name")).read_text()))
     w = _weights(o)
 
+    # Extension: observed vegetation forces ("force_data" block), or None.
+    force_data = load_force_data(case)
+
     # Steady / implicit IFT gradients are reverse mode only.
     ode_o = o("inversion_ode_solver_options")
     fwd = (
@@ -161,8 +165,8 @@ def run_inversion(case: Case) -> dict[str, Any]:
 
         Returns:
             ``(total, aux)``: the scalar loss (dimensionless; inf if the solve failed) and
-            a dict with the terms ``"wse"``, ``"uv"``, ``"bound"``, ``"slope"`` and the
-            final state ``"U"`` [3, n_cells].
+            a dict with the terms ``"wse"``, ``"uv"``, ``"bound"``, ``"slope"``,
+            ``"force"`` (0 without force data) and the final state ``"U"`` [3, n_cells].
         """
         U, ok = final_state(m, to_theta(name, p), case.U0, s)
 
@@ -174,10 +178,14 @@ def run_inversion(case: Case) -> dict[str, Any]:
         lb = bound_loss(p, w.lb, w.ub, m.n_cells) if w.bound else 0.0
         ls = slope_loss(m, p, w.slope_ub) if (w.slope and name == "zb") else 0.0
 
-        total = w.wse * dl["wse"] + w.uv * dl["uv"] + lb + ls
+        # Optional force misfit (extension).
+        lf = force_loss(m, to_theta(name, p), U, force_data) if force_data else 0.0
+
+        total = w.wse * dl["wse"] + w.uv * dl["uv"] + lb + ls + lf
         total = jnp.where(ok, total, jnp.inf)
 
-        return total, {"wse": dl["wse"], "uv": dl["uv"], "bound": lb, "slope": ls, "U": U}
+        aux = {"wse": dl["wse"], "uv": dl["uv"], "bound": lb, "slope": ls, "force": lf, "U": U}
+        return total, aux
 
     # ------------------------------------------------------------------
     # 3. Recording callback (loss history every iteration, fields every save_every)

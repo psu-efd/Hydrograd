@@ -50,6 +50,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from hydrograd.apps.force_data import force_loss, load_force_data
 from hydrograd.apps.forward import derived_fields, write_frame_vtk
 from hydrograd.apps.inversion import use_forward_mode
 from hydrograd.apps.losses import data_losses, load_truth
@@ -189,6 +190,9 @@ def run_ude(case: Case) -> dict[str, Any]:
 
     b_wse = bool(o("UDE_bWSE_loss"))
     b_uv = bool(o("UDE_b_uv_loss"))
+
+    # Extension: observed vegetation forces ("force_data" block), or None.
+    force_data = load_force_data(case)
     logger.info("UDE training with %s-mode gradients", "forward" if fwd else "reverse")
 
     # ------------------------------------------------------------------
@@ -227,10 +231,13 @@ def run_ude(case: Case) -> dict[str, Any]:
         U, ok = final_state(m, {"nn": th}, case.U0, s)
         dl = data_losses(m, U, truth)
 
-        total = b_wse * dl["wse"] + b_uv * dl["uv"]
+        # Optional force misfit (extension; e.g. sub-patch forces for a C_D closure).
+        lf = force_loss(m, {"nn": th}, U, force_data) if force_data else 0.0
+
+        total = b_wse * dl["wse"] + b_uv * dl["uv"] + lf
         total = jnp.where(ok, total, jnp.inf)
 
-        return total, {"wse": dl["wse"], "uv": dl["uv"], "U": U}
+        return total, {"wse": dl["wse"], "uv": dl["uv"], "force": lf, "U": U}
 
     # ------------------------------------------------------------------
     # 4. Recording callback (loss history every iteration, fields every save_every)

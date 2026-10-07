@@ -67,6 +67,7 @@ hydrograd run            # dispatches on bPerform_Forward_Simulation / _Inversio
 
 - **Inversion and sensitivity:** `active_param_names: ["veg_CD"]` makes the drag coefficient per material zone the active parameter.
 - **UDE:** `UDE_choice: "VegetationCD"` trains a local network C_D = f(h, |u|, a), with `input_dim` 3 and `a_bounds` in `UDE_NN_config`. Manning's n stays per zone for the bed.
+- **Force data:** a `force_data` block (`file`, `sigma_N`, `weight`) adds observed drag forces on regions (material zones, boxes or cell lists) to the inversion and UDE losses. Flow fields alone do not identify how resistance is split between neighbouring patches; patch or sub-patch forces do.
 - **Order of accuracy:** use second order (the default) for deep, slow vegetated flows. On a sloping bed, first-order hydrostatic reconstruction adds a numerical flux of about √(gh) S dx/2.
 
 **UDE network:** `UDE_NN_config.layernorm` defaults to false. The closure is a local law n_i = f(h_i). `layernorm_axes: "all"` reproduces Julia's non-local LayerNorm.
