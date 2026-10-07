@@ -32,6 +32,19 @@ Parameterizations of C_D
   optional static fourth input per cell (``Vegetation.feature``), such as the frontal area
   traversed from the leading edge of a patch, a s, lets the closure represent the
   sheltering inside a patch while staying local in the state.
+- ``struct_CD``: a physically structured law with four parameters,
+
+      C_D = C_0 (a / a_ref)^beta [1 + A exp(-(a s) / L)],
+
+  stored as ``theta["veg_struct"] = [ln C_0, beta, ln A, ln L]`` (logarithms keep C_0, A
+  and L positive). C_0 (-) is the drag coefficient of a sheltered stem at the reference
+  density a_ref (1/m); beta (-) carries the increase of the bulk C_D with stem density
+  (Tanino and Nepf 2008: at a fixed stem Reynolds number, C_D grows with the solid volume
+  fraction phi = pi a d / 4); A (-) is the excess drag of the unsheltered leading rows, and
+  L (-) is the frontal area a s over which that excess decays (sheltering by upstream
+  wakes). a s is the static feature (``Vegetation.feature``); without it the law reduces
+  to C_0 (a / a_ref)^beta (1 + A). Four parameters instead of a few hundred network
+  weights: the law extrapolates in a by construction, at the cost of fixing its shape.
 
 The frontal-area density a is a property of the vegetation (one value per material zone);
 it can also be made a parameter, ``theta["veg_a"]``.
@@ -57,7 +70,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from hydrograd.closures.mlp import apply_mlp, normalize
-from hydrograd.physics.model import SWEModel
+from hydrograd.physics.model import SWEModel, Vegetation
 from hydrograd.physics.roe import smooth_sqrt
 
 __all__ = ["vegetation_drag_coefficient", "vegetation_drag_rate", "vegetation_force"]
@@ -73,7 +86,8 @@ def vegetation_drag_coefficient(
 
     Args:
         m: the model (its ``vegetation`` selects the parameterization).
-        theta: differentiable parameters: ``veg_CD`` (per zone) or ``nn`` (network weights).
+        theta: differentiable parameters: ``veg_CD`` (per zone), ``nn`` (network weights)
+            or ``veg_struct`` (structured law).
         h: water depth (m), shape [n_cells].
         speed: depth-averaged speed |u| (m/s), shape [n_cells].
         a: frontal area per unit volume (1/m), shape [n_cells].
@@ -98,9 +112,48 @@ def vegetation_drag_coefficient(
         network_output = apply_mlp(theta["nn"], features, veg.activations, *veg.CD_bounds)
         return network_output[:, 0]
 
+    # Structured law C_D = C_0 (a / a_ref)^beta [1 + A exp(-(a s) / L)].
+    if veg.mode == "struct_CD":
+        return _structured_drag_coefficient(veg, theta["veg_struct"], a)
+
     # Default: one C_D per material zone.
     CD_zone = theta.get("veg_CD", jnp.asarray(veg.CD_zone))
     return CD_zone[m.mat_id]
+
+
+def _structured_drag_coefficient(veg: Vegetation, parameters: Array, a: Array) -> Array:
+    """C_D of the structured law C_D = C_0 (a / a_ref)^beta [1 + A exp(-(a s) / L)].
+
+    Args:
+        veg: vegetation settings (``a_ref`` (1/m) and the static feature a s (-), one value
+            per cell, or empty).
+        parameters: ``[ln C_0, beta, ln A, ln L]``, shape [4].
+        a: frontal area per unit volume (1/m), shape [n_cells].
+
+    Returns:
+        C_D (-), shape [n_cells]. Cells without stems (a = 0) get C_0; their drag rate is
+        zero anyway because it carries the factor a.
+    """
+    # Unpack the parameters; the logarithms keep C_0, A and L positive.
+    C0 = jnp.exp(parameters[0])
+    beta = parameters[1]
+    excess = jnp.exp(parameters[2])
+    decay_length = jnp.exp(parameters[3])
+
+    # Density factor (a / a_ref)^beta. Where a = 0 the ratio is replaced by 1, so the
+    # power and its derivative stay finite.
+    has_stems = a > 0.0
+    ratio = jnp.where(has_stems, a / veg.a_ref, 1.0)
+    density_factor = ratio**beta
+
+    # Leading-edge factor 1 + A exp(-(a s) / L); a s = 0 without the static feature.
+    if veg.feature:
+        traversed = jnp.asarray(veg.feature)
+    else:
+        traversed = jnp.zeros_like(a)
+    leading_edge_factor = 1.0 + excess * jnp.exp(-traversed / decay_length)
+
+    return C0 * density_factor * leading_edge_factor
 
 
 def vegetation_drag_rate(m: SWEModel, theta: Theta, h: Array, qx: Array, qy: Array) -> Array:

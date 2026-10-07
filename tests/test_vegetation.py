@@ -305,3 +305,50 @@ def test_network_with_static_feature_is_local(tmp_path) -> None:
     uniform_q = jnp.full(model.n_cells, 0.3)
     rate = np.asarray(vegetation_drag_rate(model, theta, uniform_h, uniform_q, qy))
     assert np.ptp(rate) > 0.0
+
+
+def test_structured_drag_coefficient(tmp_path) -> None:
+    """The struct_CD law equals C_0 (a / a_ref)^beta [1 + A exp(-(a s) / L)]; AD gradient = FD."""
+    # Setup: the channel with the structured law; the feature a s grows along the channel.
+    _write_vegetated_channel(tmp_path, wse_out=0.5, h_initial=0.5)
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+    traversed = A_FRONTAL * (case.mesh.centroid[:, 0] - case.mesh.centroid[:, 0].min()) / 50.0
+    vegetation = dataclasses.replace(
+        model.vegetation,
+        mode="struct_CD",
+        a_ref=1.0,
+        feature=tuple(float(value) for value in traversed),
+    )
+    model = dataclasses.replace(model, vegetation=vegetation)
+
+    # Parameters: C_0 = 0.8, beta = 0.1, A = 0.5, L = 2.
+    parameters = jnp.array([np.log(0.8), 0.1, np.log(0.5), np.log(2.0)])
+    theta = {"veg_struct": parameters}
+
+    # A random wet state.
+    rng = np.random.default_rng(4)
+    h = jnp.asarray(rng.uniform(0.2, 0.8, model.n_cells))
+    qx = jnp.asarray(rng.uniform(0.1, 0.5, model.n_cells))
+    qy = jnp.zeros(model.n_cells)
+
+    # Compare the drag rate with the analytic law in the vegetated cells.
+    a = np.asarray(model.vegetation.a_zone)[np.asarray(model.mat_id)]
+    speed = np.asarray(qx) / np.asarray(h)
+    CD_expected = 0.8 * np.where(a > 0, a, 1.0) ** 0.1 * (1.0 + 0.5 * np.exp(-traversed / 2.0))
+    rate_expected = 0.5 * CD_expected * a * speed
+    rate = np.asarray(vegetation_drag_rate(model, theta, h, qx, qy))
+    np.testing.assert_allclose(rate, rate_expected, rtol=1e-6, atol=1e-12)
+
+    def total_rate(p: jax.Array) -> jax.Array:
+        """Sum of c_veg (1/s) over all cells as a function of the four parameters."""
+        return jnp.sum(vegetation_drag_rate(model, {"veg_struct": p}, h, qx, qy))
+
+    # Gradient with respect to the four parameters against central differences.
+    gradient = np.asarray(jax.grad(total_rate)(parameters))
+    step = 1e-6
+    for k in range(4):
+        plus = total_rate(parameters.at[k].add(step))
+        minus = total_rate(parameters.at[k].add(-step))
+        np.testing.assert_allclose(gradient[k], (plus - minus) / (2.0 * step), rtol=1e-6)
+    assert np.all(np.isfinite(gradient))
