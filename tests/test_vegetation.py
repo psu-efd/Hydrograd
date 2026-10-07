@@ -263,3 +263,45 @@ def test_region_force_in_uniform_flow(tmp_path) -> None:
     expected = 1000.0 * 0.5 * CD * A_FRONTAL * q ** 2 / h_normal * region_area
     np.testing.assert_allclose(force, expected, rtol=5e-3)
     np.testing.assert_allclose(gradient, finite_difference, rtol=1e-4)
+
+
+def test_network_with_static_feature_is_local(tmp_path) -> None:
+    """A fourth static input (e.g. traversed frontal area a s) keeps the closure local in h."""
+    # Setup: the channel with a 4-input C_D network; the feature grows along the channel.
+    _write_vegetated_channel(tmp_path, wse_out=0.5, h_initial=0.5)
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+    traversed = A_FRONTAL * case.mesh.centroid[:, 0]
+    vegetation = dataclasses.replace(
+        model.vegetation,
+        mode="nn_CD",
+        activations=("tanh",),
+        CD_bounds=(0.5, 2.0),
+        umag_bounds=(0.0, 2.0),
+        a_bounds=(0.0, 5.0),
+        feature=tuple(float(value) for value in traversed),
+        feature_bounds=(0.0, float(traversed.max())),
+    )
+    model = dataclasses.replace(model, vegetation=vegetation)
+    theta = {"nn": init_mlp(jax.random.PRNGKey(2), 4, [6], 1)}
+
+    # A random wet state.
+    rng = np.random.default_rng(3)
+    h = jnp.asarray(rng.uniform(0.2, 0.8, model.n_cells))
+    qx = jnp.asarray(rng.uniform(0.1, 0.5, model.n_cells))
+    qy = jnp.zeros(model.n_cells)
+
+    def drag_rate_of_depth(depth: jax.Array) -> jax.Array:
+        """c_veg (1/s) of every cell as a function of all depths (m)."""
+        return vegetation_drag_rate(model, theta, depth, qx, qy)
+
+    # Run and compare: diagonal Jacobian; the feature makes C_D vary along the channel
+    # even for identical cell states.
+    jacobian = np.asarray(jax.jacfwd(drag_rate_of_depth)(h))
+    off_diagonal = jacobian - np.diag(np.diag(jacobian))
+    assert np.max(np.abs(off_diagonal)) == 0.0
+
+    uniform_h = jnp.full(model.n_cells, 0.5)
+    uniform_q = jnp.full(model.n_cells, 0.3)
+    rate = np.asarray(vegetation_drag_rate(model, theta, uniform_h, uniform_q, qy))
+    assert np.ptp(rate) > 0.0

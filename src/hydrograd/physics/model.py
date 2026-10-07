@@ -110,6 +110,10 @@ class Vegetation:
         activations: hidden-layer activations of the C_D network.
         CD_bounds: output bounds of the network (-).
         h_bounds, umag_bounds, a_bounds: input normalization ranges (m, m/s, 1/m).
+        feature: optional fourth input of the C_D network, one value per cell (e.g. the
+            frontal area traversed from the leading edge of a patch, a s, which carries
+            the sheltering inside a patch); empty for the three-input network.
+        feature_bounds: normalization range of ``feature``.
     """
 
     mode: str = "none"
@@ -120,6 +124,8 @@ class Vegetation:
     h_bounds: tuple[float, float] = (0.0, 1.0)
     umag_bounds: tuple[float, float] = (0.0, 1.0)
     a_bounds: tuple[float, float] = (0.0, 10.0)
+    feature: tuple[float, ...] = ()
+    feature_bounds: tuple[float, float] = (0.0, 1.0)
 
 
 @dataclass(frozen=True)

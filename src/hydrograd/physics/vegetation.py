@@ -28,7 +28,10 @@ Parameterizations of C_D
 ------------------------
 - ``zone``: one C_D per material zone (constant, or inverted as ``theta["veg_CD"]``).
 - ``nn_CD``: a local neural-network closure C_D_i = f(h_i, |u|_i, a_i) with weights in
-  ``theta["nn"]``. Each cell's C_D depends only on that cell's state (a local law).
+  ``theta["nn"]``. Each cell's C_D depends only on that cell's state (a local law). An
+  optional static fourth input per cell (``Vegetation.feature``), such as the frontal area
+  traversed from the leading edge of a patch, a s, lets the closure represent the
+  sheltering inside a patch while staying local in the state.
 
 The frontal-area density a is a property of the vegetation (one value per material zone);
 it can also be made a parameter, ``theta["veg_a"]``.
@@ -80,12 +83,18 @@ def vegetation_drag_coefficient(
     """
     veg = m.vegetation
 
-    # Local neural-network closure C_D = f(h, |u|, a), inputs normalized to [-1, 1].
+    # Neural-network closure C_D = f(h, |u|, a[, feature]), inputs normalized to [-1, 1].
+    # The optional fourth input is a static per-cell quantity (e.g. the frontal area
+    # traversed into a patch, a s), so C_D still depends on the state of its own cell only.
     if veg.mode == "nn_CD":
         h_input = normalize(h, *veg.h_bounds)
         speed_input = normalize(speed, *veg.umag_bounds)
         a_input = normalize(a, *veg.a_bounds)
-        features = jnp.stack([h_input, speed_input, a_input], axis=1)
+        inputs = [h_input, speed_input, a_input]
+        if veg.feature:
+            feature = jnp.asarray(veg.feature)
+            inputs.append(normalize(feature, *veg.feature_bounds))
+        features = jnp.stack(inputs, axis=1)
         network_output = apply_mlp(theta["nn"], features, veg.activations, *veg.CD_bounds)
         return network_output[:, 0]
 
