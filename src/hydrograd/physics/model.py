@@ -155,6 +155,40 @@ class Turbulence:
     nu_constant: float = 0.0
 
 
+@dataclass(frozen=True)
+class WallFriction:
+    """Shear stress of the side walls (WALL boundary faces) from the log law of the wall.
+
+    Without it a WALL face is free-slip: no mass flux and no tangential stress. With
+    ``mode == "loglaw"`` each wall face exerts the stress tau_w / rho = u_*^2 against the
+    tangential velocity u_t of its cell, over the wetted wall area h L_face. The friction
+    velocity u_* (m/s) solves the combined smooth/rough log law
+
+        u_t / u_* = (1 / kappa) ln(y / y_0),   y_0 = nu / (E u_*) + k_s / 30,
+
+    with y the distance from the cell centroid to the wall (m), and the viscous-sublayer
+    law u_t / u_* = y u_* / nu where y+ = y u_* / nu < y+_lam (see ``physics.walls``).
+
+    Attributes:
+        mode: ``none`` (free-slip walls, default) or ``loglaw``.
+        ks: equivalent sand roughness of the walls k_s (m); 0 for hydraulically smooth
+            walls. Differentiable as ``theta["wall_ks"]``.
+        nu: kinematic viscosity of water (m^2/s; ft^2/s in EN units).
+        kappa: von Karman constant (-).
+        E: smooth-wall log-law constant (-) (9.8 as in OpenFOAM wall functions).
+        yplus_lam: y+ of the switch between the viscous-sublayer and log laws (-).
+        iterations: fixed-point iterations for u_* (unrolled, differentiable).
+    """
+
+    mode: str = "none"
+    ks: float = 0.0
+    nu: float = 1.0e-6
+    kappa: float = 0.41
+    E: float = 9.8
+    yplus_lam: float = 11.53
+    iterations: int = 12
+
+
 @dataclass(frozen=True, eq=False)
 class SWEModel:
     """Static arrays of the semi-discrete SWE problem (all JAX arrays, 0-based).
@@ -199,6 +233,7 @@ class SWEModel:
             (robustness of the implicit Newton solve).
         fi_ro: interior-face midpoint minus owner centroid (m), [n_fi, 2].
         fi_rr: interior-face midpoint minus neighbour centroid (m), [n_fi, 2].
+        fb_ro: boundary-face midpoint minus its cell centroid (m), [n_fb, 2].
         loss_velocity_eps: eps (m) in u = q/(h + eps) in the losses; None -> h_small
             (as in the truth files).
         Q_times: time grid (s) when Q is a time series, [n_t].
@@ -244,11 +279,13 @@ class SWEModel:
     dry_smoothing: float = 0.0         # m; > 0 smooths max(h, 0) at wet/dry fronts
     fi_ro: Array | None = None         # interior-face midpoint - owner centroid (m), [n_fi, 2]
     fi_rr: Array | None = None         # interior-face midpoint - neighbour centroid (m)
+    fb_ro: Array | None = None         # boundary-face midpoint - cell centroid (m), [n_fb, 2]
     loss_velocity_eps: float | None = None  # u = q/(h + eps) in losses; None -> h_small
     Q_times: Array | None = None       # time grid (s) when Q is a time series
     WSE_times: Array | None = None     # time grid (s) when WSE is a time series
     vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
     turbulence: Turbulence = field(default_factory=Turbulence)  # eddy viscosity; none by default
+    wall_friction: WallFriction = field(default_factory=WallFriction)  # free-slip by default
 
     def __hash__(self) -> int:
         """Identity hash, so that a model can be a static argument of ``jax.jit``.
@@ -367,6 +404,9 @@ def build_model(mesh: Mesh, zb_cells: np.ndarray, wstill: np.ndarray, mat_id: np
     fi_ro = mesh.midpoint[inner] - mesh.centroid[owner_inner]
     fi_rr = mesh.midpoint[inner] - mesh.centroid[neigh_inner]
 
+    # Vector from the cell centroid to each boundary-face midpoint (wall distance).
+    fb_ro = mesh.midpoint[bfaces] - mesh.centroid[mesh.owner[bfaces]]
+
     return SWEModel(
         n_cells=mesh.n_cells,
         g=g,
@@ -404,4 +444,5 @@ def build_model(mesh: Mesh, zb_cells: np.ndarray, wstill: np.ndarray, mat_id: np
         WSE_times=None if WSE_times is None else jnp.asarray(WSE_times),
         fi_ro=jnp.asarray(fi_ro),
         fi_rr=jnp.asarray(fi_rr),
+        fb_ro=jnp.asarray(fb_ro),
     )
