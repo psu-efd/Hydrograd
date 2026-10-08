@@ -189,6 +189,29 @@ class WallFriction:
     iterations: int = 12
 
 
+@dataclass(frozen=True)
+class Dispersion:
+    """Dispersive momentum flux from sub-cell velocity variations (momentum coefficient).
+
+    Averaging the momentum flux over the depth and over the plan area of a cell gives
+    <u_i u_j> = beta U_i U_j, with U the averaged velocity. Inside a stem patch the pore
+    jets and stem wakes within each cell make beta > 1 (about 1.3 in a dense array with
+    one stem per cell). The 2D fluxes use beta = 1, so the model adds the missing part
+
+        - div[(beta - 1) h U U]      (m^2/s^2, momentum rows)
+
+    (see ``physics.dispersion``).
+
+    Attributes:
+        mode: ``none`` (beta = 1 everywhere, default) or ``zone`` (beta per material).
+        beta_zone: momentum coefficient beta (-) per material ID; differentiable as
+            ``theta["disp_beta"]``.
+    """
+
+    mode: str = "none"
+    beta_zone: tuple[float, ...] = ()
+
+
 @dataclass(frozen=True, eq=False)
 class SWEModel:
     """Static arrays of the semi-discrete SWE problem (all JAX arrays, 0-based).
@@ -286,6 +309,7 @@ class SWEModel:
     vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
     turbulence: Turbulence = field(default_factory=Turbulence)  # eddy viscosity; none by default
     wall_friction: WallFriction = field(default_factory=WallFriction)  # free-slip by default
+    dispersion: Dispersion = field(default_factory=Dispersion)  # beta = 1 by default
 
     def __hash__(self) -> int:
         """Identity hash, so that a model can be a static argument of ``jax.jit``.

@@ -77,6 +77,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from hydrograd.bed import bed_slope  # noqa: F401  (kept for API symmetry)
+from hydrograd.physics.dispersion import dispersive_flux_source
 from hydrograd.physics.hllc import hllc_flux
 from hydrograd.physics.model import KIND_INLET, SWEModel
 from hydrograd.physics.rhs import (
@@ -396,6 +397,11 @@ def rhs_hr(
     # faces are free-slip.
     if m.wall_friction.mode != "none":
         dU = dU + wall_shear_source(m, theta, h, u, v)
+
+    # Optional dispersive momentum flux (beta - 1) h U U from sub-cell velocity
+    # variations (momentum coefficient beta > 1, e.g. inside stem patches).
+    if m.dispersion.mode != "none":
+        dU = dU + dispersive_flux_source(m, theta, h, u, v)
 
     # ------------------------------------------------------------------
     # 5. Bed friction: -c_f q in the momentum equations

@@ -54,6 +54,7 @@ from hydrograd.io.srh2d import SRHCase, read_srh_case
 from hydrograd.mesh import Mesh, build_mesh
 from hydrograd.params.manning import ManningLaw
 from hydrograd.physics.model import (
+    Dispersion,
     Resistance,
     SWEModel,
     Turbulence,
@@ -511,6 +512,34 @@ def _wall_friction(ctrl: Control, unit_system: str) -> WallFriction:
     )
 
 
+def _dispersion(ctrl: Control, n_materials: int) -> Dispersion:
+    """Momentum-coefficient settings from the optional ``"dispersion"`` block.
+
+    Example (beta = 1.3 in materials 2 and 3, 1 elsewhere)::
+
+        "dispersion": {"model": "zone", "beta": {"2": 1.3, "3": 1.3}}
+
+    ``beta`` is the momentum coefficient (-) per material ID (a number, a list, or a dict
+    as for the vegetation entries); it is differentiable as ``theta["disp_beta"]``.
+
+    Args:
+        ctrl: run control.
+        n_materials: number of material IDs.
+
+    Returns:
+        The dispersion settings (mode ``none``, beta = 1, if the block is absent).
+    """
+    block = ctrl.raw.get("dispersion")
+    if not block:
+        return Dispersion()
+
+    model = block.get("model", "zone")
+    if model != "zone":
+        raise ValueError(f"dispersion.model must be 'zone', got {model!r}")
+    beta_zone = _per_material(block.get("beta", 1.0), n_materials, 1.0, "beta")
+    return Dispersion(mode="zone", beta_zone=beta_zone)
+
+
 def setup_case(ctrl: Control) -> Case:
     """Read all case files and build the model, initial condition and ODE settings.
 
@@ -566,6 +595,11 @@ def setup_case(ctrl: Control) -> Case:
     if wall_friction.mode != "none":
         model = dataclasses.replace(model, wall_friction=wall_friction)
 
+    # Extension: optional momentum coefficient beta ("dispersion" block).
+    dispersion = _dispersion(ctrl, srh.mat.n_materials)
+    if dispersion.mode != "none":
+        model = dataclasses.replace(model, dispersion=dispersion)
+
     # Extension: optional "numerics" block (scheme, spatial_order, limiter, checkpoints,
     # checkpoint_memory_gb).
     num = ctrl.raw.get("numerics", {})
@@ -583,6 +617,8 @@ def setup_case(ctrl: Control) -> Case:
         raise ValueError("the 'turbulence' block is available for scheme 'hr_hllc' only")
     if model.wall_friction.mode != "none" and model.scheme != "hr_hllc":
         raise ValueError("the 'wall_friction' block is available for scheme 'hr_hllc' only")
+    if model.dispersion.mode != "none" and model.scheme != "hr_hllc":
+        raise ValueError("the 'dispersion' block is available for scheme 'hr_hllc' only")
 
     # ------------------------------------------------------------------
     # 4. Initial state U0 = [xi, q_x, q_y] and ODE settings
