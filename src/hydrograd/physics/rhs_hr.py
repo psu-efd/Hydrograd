@@ -86,6 +86,7 @@ from hydrograd.physics.rhs import (
     still_depth,
 )
 from hydrograd.physics.turbulence import turbulent_diffusion
+from hydrograd.physics.walls import wall_shear_source
 
 __all__ = ["desingularized_velocity", "max_wave_speed", "rhs_hr"]
 
@@ -390,6 +391,11 @@ def rhs_hr(
     # rate; models without a turbulence block skip it and stay bit-identical).
     if m.turbulence.mode != "none":
         dU = dU + turbulent_diffusion(m, theta, h, u, v, manning_n)
+
+    # Optional shear stress of the side walls (log-law wall function); without it WALL
+    # faces are free-slip.
+    if m.wall_friction.mode != "none":
+        dU = dU + wall_shear_source(m, theta, h, u, v)
 
     # ------------------------------------------------------------------
     # 5. Bed friction: -c_f q in the momentum equations

@@ -13,7 +13,8 @@ Pipeline
    w_still (m), and unit discharges q_x, q_y (m^2/s), as in ``process_ICs_2D.jl``.
 5. Flow-resistance model: constant Manning's n per material zone, an n(h, |U|, ks) law,
    or a neural-network closure (UDE mode).
-6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`) and
+6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`), side-wall
+   friction (``"wall_friction"`` block, see :func:`_wall_friction`) and
    horizontal eddy viscosity (``"turbulence"`` block, see :func:`_turbulence`).
 7. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
    overrides (scheme, spatial order, limiter, checkpointing), and the ODE settings.
@@ -57,6 +58,7 @@ from hydrograd.physics.model import (
     SWEModel,
     Turbulence,
     Vegetation,
+    WallFriction,
     build_model,
 )
 from hydrograd.solvers.ode import ODESettings
@@ -475,6 +477,40 @@ def _turbulence(ctrl: Control) -> Turbulence:
     )
 
 
+def _wall_friction(ctrl: Control, unit_system: str) -> WallFriction:
+    """Side-wall friction settings from the optional ``"wall_friction"`` block.
+
+    Example::
+
+        "wall_friction": {"model": "loglaw", "ks": 0.0, "nu": 1e-6}
+
+    ``ks`` is the equivalent sand roughness of the walls (m; 0 = hydraulically smooth),
+    differentiable as ``theta["wall_ks"]``; ``nu`` the kinematic viscosity (default
+    1.0e-6 m^2/s in SI, 1.08e-5 ft^2/s in EN units).
+
+    Args:
+        ctrl: run control.
+        unit_system: ``"SI"`` or ``"EN"`` (default viscosity).
+
+    Returns:
+        The wall-friction settings (mode ``none``, free-slip walls, if the block is absent).
+    """
+    block = ctrl.raw.get("wall_friction")
+    if not block:
+        return WallFriction()
+
+    model = block.get("model", "loglaw")
+    if model != "loglaw":
+        raise ValueError(f"wall_friction.model must be 'loglaw', got {model!r}")
+
+    default_nu = 1.0e-6 if unit_system == "SI" else 1.08e-5
+    return WallFriction(
+        mode=model,
+        ks=float(block.get("ks", 0.0)),
+        nu=float(block.get("nu", default_nu)),
+    )
+
+
 def setup_case(ctrl: Control) -> Case:
     """Read all case files and build the model, initial condition and ODE settings.
 
@@ -525,6 +561,11 @@ def setup_case(ctrl: Control) -> Case:
     if turbulence.mode != "none":
         model = dataclasses.replace(model, turbulence=turbulence)
 
+    # Extension: optional side-wall shear stress ("wall_friction" block).
+    wall_friction = _wall_friction(ctrl, unit)
+    if wall_friction.mode != "none":
+        model = dataclasses.replace(model, wall_friction=wall_friction)
+
     # Extension: optional "numerics" block (scheme, spatial_order, limiter, checkpoints,
     # checkpoint_memory_gb).
     num = ctrl.raw.get("numerics", {})
@@ -540,6 +581,8 @@ def setup_case(ctrl: Control) -> Case:
 
     if model.turbulence.mode != "none" and model.scheme != "hr_hllc":
         raise ValueError("the 'turbulence' block is available for scheme 'hr_hllc' only")
+    if model.wall_friction.mode != "none" and model.scheme != "hr_hllc":
+        raise ValueError("the 'wall_friction' block is available for scheme 'hr_hllc' only")
 
     # ------------------------------------------------------------------
     # 4. Initial state U0 = [xi, q_x, q_y] and ODE settings
