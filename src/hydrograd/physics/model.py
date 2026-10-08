@@ -101,9 +101,11 @@ class Vegetation:
     rate is added to the bed-friction rate (see ``physics.vegetation``).
 
     Attributes:
-        mode: ``none`` (no vegetation, default), ``zone`` (C_D per material zone) or
+        mode: ``none`` (no vegetation, default), ``zone`` (C_D per material zone),
             ``nn_CD`` (a local neural-network closure C_D = f(h, |u|, a), weights in
-            ``theta["nn"]``).
+            ``theta["nn"]``) or ``struct_CD`` (the four-parameter law
+            C_D = C_0 (a / a_ref)^beta [1 + A exp(-feature / L)], parameters in
+            ``theta["veg_struct"]``, see ``physics.vegetation``).
         a_zone: frontal area per unit volume a = d / dS^2 for each material ID (1/m);
             0 where there is no vegetation.
         CD_zone: drag coefficient C_D for each material ID (-), for ``mode == "zone"``.
@@ -114,6 +116,7 @@ class Vegetation:
             frontal area traversed from the leading edge of a patch, a s, which carries
             the sheltering inside a patch); empty for the three-input network.
         feature_bounds: normalization range of ``feature``.
+        a_ref: reference frontal area per unit volume of the ``struct_CD`` law (1/m).
     """
 
     mode: str = "none"
@@ -126,6 +129,7 @@ class Vegetation:
     a_bounds: tuple[float, float] = (0.0, 10.0)
     feature: tuple[float, ...] = ()
     feature_bounds: tuple[float, float] = (0.0, 1.0)
+    a_ref: float = 1.0
 
 
 @dataclass(frozen=True)
