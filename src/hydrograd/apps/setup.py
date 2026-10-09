@@ -454,10 +454,13 @@ def _turbulence(ctrl: Control) -> Turbulence:
         "turbulence": {"model": "constant", "nu_t": 0.01}
         "turbulence": {"model": "mixing_length", "coefficient": 0.7,
                        "mixing_coefficient": 0.3}
+        "turbulence": {"model": "k_epsilon", "initial_speed": 0.1}
 
     The parabolic model is nu_t = C_t u_* h + nu_0 (SRH-2D); C_t is differentiable as
     ``theta["eddy_Ct"]``. The mixing-length model adds (C_m h)^2 |S| (``mixing_coefficient``
-    = C_m, differentiable as ``theta["eddy_Cm"]``).
+    = C_m, differentiable as ``theta["eddy_Cm"]``). The k-epsilon model (Rastogi & Rodi
+    1978) transports h k and h epsilon as state rows 3 and 4; its constants (``c_mu``,
+    ``c_1``, ``c_2``, ``sigma_k``, ``sigma_e``) default to the standard values.
 
     Args:
         ctrl: run control.
@@ -470,11 +473,19 @@ def _turbulence(ctrl: Control) -> Turbulence:
         return Turbulence()
 
     model = block.get("model", "parabolic")
-    if model not in ("parabolic", "constant", "mixing_length"):
+    if model not in ("parabolic", "constant", "mixing_length", "k_epsilon"):
         raise ValueError(
-            "turbulence.model must be 'parabolic', 'constant' or 'mixing_length', "
-            f"got {model!r}"
+            "turbulence.model must be 'parabolic', 'constant', 'mixing_length' or "
+            f"'k_epsilon', got {model!r}"
         )
+
+    # k-epsilon constants: standard values unless given.
+    defaults = Turbulence()
+    k_epsilon = {
+        key: float(block.get(key, getattr(defaults, key)))
+        for key in ("c_mu", "c_1", "c_2", "sigma_k", "sigma_e", "k_min", "eps_min",
+                    "initial_speed")
+    }
 
     return Turbulence(
         mode=model,
@@ -482,6 +493,7 @@ def _turbulence(ctrl: Control) -> Turbulence:
         nu0=float(block.get("nu0", 1.0e-6)),
         nu_constant=float(block.get("nu_t", 0.0)),
         mixing_coefficient=float(block.get("mixing_coefficient", 0.0)),
+        **k_epsilon,
     )
 
 
@@ -545,6 +557,31 @@ def _dispersion(ctrl: Control, n_materials: int) -> Dispersion:
         raise ValueError(f"dispersion.model must be 'zone', got {model!r}")
     beta_zone = _per_material(block.get("beta", 1.0), n_materials, 1.0, "beta")
     return Dispersion(mode="zone", beta_zone=beta_zone)
+
+
+def initial_turbulence(model: SWEModel, U0: Array) -> Array:
+    """Append the k-epsilon rows h k and h epsilon to a hydraulic state at local equilibrium.
+
+    k and epsilon are the uniform-flow equilibrium values of each cell
+    (``physics.k_epsilon.equilibrium``) at the speed max(|U|, initial_speed), so that a
+    still initial state starts with some turbulence.
+
+    Args:
+        model: the model (k-epsilon settings, Manning's n).
+        U0: hydraulic state [xi, q_x, q_y], shape [3, n_cells].
+
+    Returns:
+        State [xi, q_x, q_y, h k, h epsilon], shape [5, n_cells].
+    """
+    from hydrograd.physics.k_epsilon import equilibrium
+    from hydrograd.physics.rhs import manning_n_cells
+
+    h = jnp.maximum(U0[0] + model.hstill, model.h_small)
+    speed = jnp.sqrt(U0[1] ** 2 + U0[2] ** 2) / h
+    speed = jnp.maximum(speed, model.turbulence.initial_speed)
+    manning_n = manning_n_cells(model, {}, h, U0[1], U0[2])
+    k, epsilon = equilibrium(model, h, speed, manning_n)
+    return jnp.concatenate([U0, jnp.stack([h * k, h * epsilon])])
 
 
 def setup_case(ctrl: Control) -> Case:
@@ -631,6 +668,8 @@ def setup_case(ctrl: Control) -> Case:
     # 4. Initial state U0 = [xi, q_x, q_y] and ODE settings
     # ------------------------------------------------------------------
     U0 = jnp.stack([jnp.asarray(wse - wstill), jnp.asarray(qx), jnp.asarray(qy)])
+    if model.turbulence.mode == "k_epsilon":
+        U0 = initial_turbulence(model, U0)
     ode = _ode_settings(ctrl, tspan, dt)
 
     # Extension (numerics block): checkpointing of the reverse-mode adjoint.

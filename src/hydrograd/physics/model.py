@@ -44,7 +44,9 @@ from hydrograd.params.manning import ManningLaw
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["UNITS", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model"]
+__all__ = [
+    "UNITS", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model", "n_state"
+]
 
 # GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
 # formula: U = (k_n / n) R^(2/3) S^(1/2).
@@ -143,16 +145,24 @@ class Turbulence:
     - ``constant``: nu_t = ``nu_constant`` + nu_0;
     - ``mixing_length``: the parabolic model plus a shear-generated part,
       nu_t = C_t u_* h + (C_m h)^2 |S| + nu_0, with |S| = sqrt(2 S_ij S_ij) (1/s) the
-      magnitude of the depth-averaged strain rate and C_m h the mixing length (m).
+      magnitude of the depth-averaged strain rate and C_m h the mixing length (m);
+    - ``k_epsilon``: the depth-averaged k-epsilon model (Rastogi & Rodi 1978),
+      nu_t = c_mu k^2 / epsilon + nu_0, with K = h k and E = h epsilon transported as state
+      rows 3 and 4 (``physics.k_epsilon``).
 
     Attributes:
-        mode: ``none`` (no turbulent diffusion, default), ``parabolic``, ``constant`` or
-            ``mixing_length``.
+        mode: ``none`` (no turbulent diffusion, default), ``parabolic``, ``constant``,
+            ``mixing_length`` or ``k_epsilon``.
         coefficient: C_t of the parabolic part (-); differentiable as ``theta["eddy_Ct"]``.
         nu0: background (molecular) viscosity nu_0 (m^2/s).
         nu_constant: eddy viscosity of the ``constant`` model (m^2/s).
         mixing_coefficient: C_m of the ``mixing_length`` model (-), mixing length / depth;
             differentiable as ``theta["eddy_Cm"]``.
+        c_mu, c_1, c_2, sigma_k, sigma_e: constants of the k-epsilon model (-).
+        k_min: floor of k (m^2/s^2) inside the k-epsilon formulas.
+        eps_min: floor of epsilon (m^2/s^3) inside the k-epsilon formulas.
+        initial_speed: speed (m/s) below which the initial k and epsilon are taken from
+            the equilibrium at this speed (a still initial state has no turbulence).
     """
 
     mode: str = "none"
@@ -160,6 +170,14 @@ class Turbulence:
     nu0: float = 1.0e-6
     nu_constant: float = 0.0
     mixing_coefficient: float = 0.0
+    c_mu: float = 0.09
+    c_1: float = 1.44
+    c_2: float = 1.92
+    sigma_k: float = 1.0
+    sigma_e: float = 1.3
+    k_min: float = 1.0e-10
+    eps_min: float = 1.0e-12
+    initial_speed: float = 0.1
 
 
 @dataclass(frozen=True)
@@ -363,6 +381,18 @@ def _boundary_values(values: dict, ids: tuple[int, ...]) -> tuple[np.ndarray, np
         rows.append(row)
 
     return np.stack(rows), grid
+
+
+def n_state(m: SWEModel) -> int:
+    """Number of state rows: 3 ([xi, q_x, q_y]) or 5 with k-epsilon ([..., h k, h eps]).
+
+    Args:
+        m: the model.
+
+    Returns:
+        3 or 5.
+    """
+    return 5 if m.turbulence.mode == "k_epsilon" else 3
 
 
 def build_model(mesh: Mesh, zb_cells: np.ndarray, wstill: np.ndarray, mat_id: np.ndarray,

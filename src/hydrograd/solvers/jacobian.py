@@ -41,7 +41,8 @@ groups the cells into n_colors such sets. For each color c and component k the s
     s_{c,k} = sum over cells j of color c of e_{(k, j)}
 
 gives J_local s_{c,k}, whose row (kr, i) equals the single entry J[(kr, i), (k, j)] with
-j the (unique) cell of color c that touches i. So 3 * n_colors JVPs recover every
+j the (unique) cell of color c that touches i. So n_vars * n_colors JVPs (n_vars = 3,
+or 5 with k-epsilon) recover every
 nonzero exactly (no approximation). The color count depends on the mesh connectivity
 only, not on the inlet width, because the inlet coupling is carried by A C^T.
 """
@@ -57,7 +58,7 @@ import numpy as np
 import scipy.sparse as sp
 from jax import Array
 
-from hydrograd.physics.model import SWEModel
+from hydrograd.physics.model import SWEModel, n_state
 
 __all__ = ["JacobianPattern", "full_jacobian", "jacobian_pattern", "linearize"]
 
@@ -70,8 +71,8 @@ def _cell_adjacency(m: SWEModel) -> sp.csr_matrix:
 
     Returns:
         Boolean CSR matrix, shape [n_cells, n_cells]; entry (i, j) is True if R_i may
-        depend on U_j. First order: face neighbours; second order or the mixing-length
-        eddy viscosity: neighbours of neighbours.
+        depend on U_j. First order: face neighbours; second order, the mixing-length
+        eddy viscosity or k-epsilon: neighbours of neighbours.
     """
     n = m.n_cells
     owner = np.asarray(m.fi_o)
@@ -84,11 +85,12 @@ def _cell_adjacency(m: SWEModel) -> sp.csr_matrix:
     A = sp.csr_matrix((values, (rows, cols)), shape=(n, n))
     A.sum_duplicates()
 
-    # MUSCL, and the mixing-length eddy viscosity: R_i depends on its neighbours'
-    # gradients, so the stencil is two cells wide. The pattern of A @ A is that stencil.
+    # MUSCL, the mixing-length eddy viscosity and k-epsilon (strain-rate production): R_i
+    # depends on its neighbours' gradients, so the stencil is two cells wide. The pattern
+    # of A @ A is that stencil.
     turbulence = getattr(m, "turbulence", None)
-    mixing_length = turbulence is not None and turbulence.mode == "mixing_length"
-    if getattr(m, "order", 1) == 2 or mixing_length:
+    uses_gradients = turbulence is not None and turbulence.mode in ("mixing_length", "k_epsilon")
+    if getattr(m, "order", 1) == 2 or uses_gradients:
         A_int = A.astype(np.int32)
         A = (A_int @ A_int).astype(bool).tocsr()
 
@@ -138,14 +140,15 @@ class JacobianPattern:
 
     Attributes:
         n: number of cells.
+        n_vars: number of state components per cell (3, or 5 with k-epsilon).
         rows, cols: cell indices (i, j) of the nonzero cell pairs of the pattern, int64
             arrays of shape [nnz_cells].
         color: color of each cell (column), int64 array of shape [n].
         n_colors: number of colors.
-        seeds: JVP seed directions, shape [3 n_colors, 3, n]; seed 3 c + k is 1 in
-            component k of every cell of color c and 0 elsewhere.
+        seeds: JVP seed directions, shape [n_vars n_colors, n_vars, n]; seed
+            n_vars c + k is 1 in component k of every cell of color c and 0 elsewhere.
         R, C: flat row and column indices (``k * n + i``) of every scalar nonzero, shape
-            [9 nnz_cells]; each cell pair expands into a 3 x 3 block.
+            [n_vars^2 nnz_cells]; each cell pair expands into an n_vars x n_vars block.
         _gather: index tuple that picks every nonzero value out of the compressed JVP
             array (see ``assemble``).
     """
@@ -157,6 +160,8 @@ class JacobianPattern:
             m: the model (mesh connectivity and scheme order).
         """
         self.n = m.n_cells
+        self.n_vars = n_state(m)
+        nv = self.n_vars
 
         # Nonzero cell pairs (i, j) of the dependence pattern.
         A = _cell_adjacency(m).tocoo()
@@ -168,22 +173,22 @@ class JacobianPattern:
         self.n_colors = int(self.color.max()) + 1
 
         # One seed per (color, component): ones in component k of all cells of color c.
-        seeds = np.zeros((3 * self.n_colors, 3, self.n))
+        seeds = np.zeros((nv * self.n_colors, nv, self.n))
         for c in range(self.n_colors):
-            for k in range(3):
-                seeds[3 * c + k, k, self.color == c] = 1.0
+            for k in range(nv):
+                seeds[nv * c + k, k, self.color == c] = 1.0
         self.seeds = seeds  # NumPy: the pattern is cached across traces, so no JAX arrays here
 
-        # Expand each cell-pair nonzero (i, j) into its 3x3 block of scalar nonzeros:
+        # Expand each cell-pair nonzero (i, j) into its nv x nv block of scalar nonzeros:
         # row component kr, column component kc, flat indices kr * n + i and kc * n + j.
-        kr, kc = np.meshgrid(np.arange(3), np.arange(3), indexing="ij")   # row / column component
+        kr, kc = np.meshgrid(np.arange(nv), np.arange(nv), indexing="ij")
         self.R = (kr[None] * self.n + self.rows[:, None, None]).ravel()
         self.C = (kc[None] * self.n + self.cols[:, None, None]).ravel()
 
         # Where each nonzero sits in the compressed JVPs:
-        # comp[3 cj + kc, kr, i] is J[(kr, i), (kc, j)], with cj the color of column cell j.
+        # comp[nv cj + kc, kr, i] is J[(kr, i), (kc, j)], with cj the color of column cell j.
         cj = self.color[self.cols]
-        self._gather = (3 * cj[:, None, None] + kc[None], kr[None], self.rows[:, None, None])
+        self._gather = (nv * cj[:, None, None] + kc[None], kr[None], self.rows[:, None, None])
 
     def compressed(self, f: Callable[[Array], Array], U: Array) -> Array:
         """JVPs of f at U along all seeds (JAX-traceable).
@@ -210,8 +215,8 @@ class JacobianPattern:
         Returns:
             J_local as a CSR matrix, shape [3n, 3n].
         """
-        vals = np.asarray(comp)[self._gather]  # [nnz, 3(kk), 3(k)]
-        N = 3 * self.n
+        vals = np.asarray(comp)[self._gather]  # [nnz, nv (row comp.), nv (column comp.)]
+        N = self.n_vars * self.n
         return sp.csr_matrix((vals.ravel(), (self.R, self.C)), shape=(N, N))
 
 
@@ -323,7 +328,7 @@ def dense_jacobian(m: SWEModel, theta: dict[str, Any], U: Array) -> np.ndarray:
 
     def flat_residual(X: Array) -> Array:
         """Flat R as a function of the flat state, shape [3n] -> [3n]."""
-        return rhs(m, theta, X.reshape(3, -1)).reshape(-1)
+        return rhs(m, theta, X.reshape(n_state(m), -1)).reshape(-1)
 
     J = jax.jacfwd(flat_residual)(U.reshape(-1))
     return np.asarray(J)

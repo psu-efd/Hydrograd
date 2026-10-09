@@ -106,7 +106,7 @@ def eddy_viscosity(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
 
 
 def turbulent_diffusion(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
-                        manning_n: Array) -> Array:
+                        manning_n: Array, nu_t: Array | None = None) -> Array:
     """Rate of change of the state from turbulent diffusion, div(h nu_t grad u).
 
     Args:
@@ -115,6 +115,8 @@ def turbulent_diffusion(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
         h: water depth (m), shape [n_cells].
         u, v: depth-averaged velocities (m/s), shape [n_cells].
         manning_n: Manning's n (s/m^(1/3)), shape [n_cells].
+        nu_t: eddy viscosity per cell (m^2/s), shape [n_cells], given by a transport
+            model (k-epsilon); None computes it with :func:`eddy_viscosity`.
 
     Returns:
         dU/dt contribution, shape [3, n_cells]: zero for xi, and the x- and y-momentum
@@ -122,7 +124,8 @@ def turbulent_diffusion(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
     """
     owner = m.fi_o
     neighbour = m.fi_r
-    nu_t = eddy_viscosity(m, theta, h, u, v, manning_n)
+    if nu_t is None:
+        nu_t = eddy_viscosity(m, theta, h, u, v, manning_n)
 
     # Centroid-to-centroid distance projected on the face normal (m). The face-to-centroid
     # vectors are set by build_model for every model.

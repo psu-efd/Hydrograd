@@ -212,6 +212,8 @@ def _newton_step(m: SWEModel, s: ImplicitSettings, theta: Theta, U0: Array, t0: 
 
     def clip(U):
         """Optionally clip xi so that h >= 0 (``s.clip_depth``)."""
+        if U.shape[0] > 3:
+            U = U.at[3:].set(jnp.maximum(U[3:], 0.0))      # h k, h epsilon >= 0
         if not s.clip_depth:
             return U
         return U.at[0].set(jnp.maximum(U[0], xi_min))

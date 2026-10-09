@@ -161,8 +161,9 @@ class SSPRK3PointImplicit(dfx.AbstractSolver):
 
     Sub-step E (a point-implicit Euler step):
 
-        W = U + dt F(U)                  (fluxes and bed terms)
-        q_W <- q_W / (1 + dt c(U))       (friction = -c q, c in 1/s)
+        W = U + dt F(U)                  (fluxes, bed and production terms)
+        W <- W / (1 + dt c(U))           (linear sinks -c U, c in 1/s per row: friction
+                                          on q, dissipation on h k and h epsilon)
 
     Unconditionally stable for friction (explicit friction needs dt c < 2, which fails on
     thin films: c ~ 24 /s for h = 1 mm, |u| = 1 m/s, n = 0.035), and friction can never
@@ -173,8 +174,9 @@ class SSPRK3PointImplicit(dfx.AbstractSolver):
         U3 = 1/3 U + 2/3 E(U2)
 
     Attributes:
-        split: function (t, U, theta) -> (F, c): flux-and-bed part of dU/dt, shape
-            [3, n_cells], and the friction rate c (1/s), shape [n_cells].
+        split: function (t, U, theta) -> (F, c): dU/dt without the sinks, shape
+            [n_rows, n_cells], and the sink rate of every row c (1/s), shape
+            [n_rows, n_cells] (0 for xi).
     """
 
     split: Callable = eqx.field(static=True)       # (t, U, args) -> (F, c)
@@ -193,7 +195,7 @@ class SSPRK3PointImplicit(dfx.AbstractSolver):
         """Point-implicit Euler sub-step E(U) at time t (see the class docstring)."""
         F, c = self.split(t, U, args)
         W = U + dt * F
-        return W.at[1:].set(W[1:] / (1.0 + dt * c))
+        return W / (1.0 + dt * c)
 
     def step(self, terms, t0, t1, y0, args, solver_state, made_jump):
         """One SSP-RK3 step from t0 to t1.
@@ -332,7 +334,7 @@ def solve_swe(m: SWEModel, theta: dict[str, Any], U0: Array, s: ODESettings,
     if s.solver == "SSPRK3()":
         # CFL-limited steps: length scale min(A/P), with P the cell perimeter summed over
         # interior faces (owner and neighbour side) and boundary faces.
-        from hydrograd.physics.rhs_hr import max_wave_speed
+        from hydrograd.physics.rhs_hr import max_eddy_viscosity, max_wave_speed
 
         perim_owner = jax.ops.segment_sum(m.fi_L, m.fi_o, m.n_cells)
         perim_neighbour = jax.ops.segment_sum(m.fi_L, m.fi_r, m.n_cells)
@@ -347,12 +349,22 @@ def solve_swe(m: SWEModel, theta: dict[str, Any], U0: Array, s: ODESettings,
         else:
             cfl = 0.5
 
-        def wave_speed(y, a):
-            """Largest wave speed (m/s) of state y with parameters a."""
-            return max_wave_speed(m, a, y)
+        length_scale = jnp.min(m.area / perim)
+        diffusion_limited = m.turbulence.mode in ("mixing_length", "k_epsilon")
 
-        ctrl = CFLStepSize(cfl=cfl, dx=jnp.min(m.area / perim), dt_max=s.t1 - s.t0,
-                           speed=wave_speed)
+        def wave_speed(y, a):
+            """Largest wave speed (m/s) of state y with parameters a.
+
+            With the mixing-length or k-epsilon eddy viscosity (which can grow large in
+            shear layers) the diffusion adds the speed 2 nu_max / dx, so that the step
+            also satisfies the explicit diffusion limit dt <= cfl dx^2 / (2 nu_max).
+            """
+            speed = max_wave_speed(m, a, y)
+            if diffusion_limited:
+                speed = speed + 2.0 * max_eddy_viscosity(m, a, y) / length_scale
+            return speed
+
+        ctrl = CFLStepSize(cfl=cfl, dx=length_scale, dt_max=s.t1 - s.t0, speed=wave_speed)
     elif s.adaptive and s.solver in _FIXED_ONLY:
         logger.warning("%s has no error estimator; using fixed steps dt = %g s", s.solver, s.dt)
 
