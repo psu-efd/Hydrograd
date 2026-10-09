@@ -33,6 +33,29 @@ In uniform flow (P_h = 0) the local equilibrium is
 the classic depth-averaged eddy viscosity of Rastogi & Rodi. Standard constants:
 c_mu = 0.09, c_1 = 1.44, c_2 = 1.92, sigma_k = 1.0, sigma_e = 1.3.
 
+Side walls (wall functions)
+---------------------------
+The bed enters through P_kV and P_eV. Side walls with log-law friction (the
+``"wall_friction"`` block, ``physics.walls``) add, in each wall-adjacent cell:
+
+- the work of the wall shear stress as production of k (the side-wall counterpart of
+  the bed term c_f |U|^3 = h P_kV):
+
+      h P_kW = sum over wall faces of u_*w^2 |u_t| h L_f / A          (m^3/s^3),
+
+  with u_*w the log-law friction velocity, u_t the tangential velocity, L_f the face
+  length and A the cell area; it equals the rate at which the wall stress removes
+  mean-flow kinetic energy;
+- a relaxation of epsilon towards the log-layer value
+  eps_w = c_mu^(3/4) k^(3/2) / (kappa y), y the distance from the centroid to the wall,
+  over one turbulence time scale k / epsilon:
+
+      d(h eps)/dt += h (eps_w - eps) eps / k,
+
+  whose -h eps^2 / k part is a sink of E (rate eps / k, point-implicit in SSP-RK3).
+
+Free-slip walls (no ``wall_friction`` block) carry no turbulence sources.
+
 Discretization
 --------------
 - Advection: first-order upwind with the mass flux of the HLLC scheme at each face, so
@@ -61,12 +84,14 @@ from jax import Array
 
 from hydrograd.physics.model import KIND_WALL, SWEModel
 from hydrograd.physics.reconstruct import green_gauss
+from hydrograd.physics.walls import wall_face_state
 
 __all__ = [
     "bed_friction_coefficient",
     "equilibrium",
     "k_epsilon_rates",
     "turbulence_variables",
+    "wall_function_terms",
 ]
 
 # Differentiable parameters (none specific to k-epsilon yet).
@@ -215,8 +240,48 @@ def _face_diffusion(m: SWEModel, h: Array, diffusivity: Array, field: Array) -> 
     )
 
 
+def wall_function_terms(
+    m: SWEModel, theta: Theta, h: Array, u: Array, v: Array, k: Array, epsilon: Array,
+) -> tuple[Array, Array, Array]:
+    """Side-wall production of k and relaxation of epsilon in wall-adjacent cells.
+
+    Args:
+        m: the model (``wall_friction`` and ``turbulence`` settings, boundary faces).
+        theta: differentiable parameters (``wall_ks``).
+        h: water depth (m), shape [n_cells].
+        u, v: depth-averaged velocities (m/s), shape [n_cells].
+        k, epsilon: floored k (m^2/s^2) and epsilon (m^2/s^3), shape [n_cells].
+
+    Returns:
+        (k_source, epsilon_source, epsilon_sink_rate), each of shape [n_cells]:
+        h P_kW (m^3/s^3) and h eps_w eps / k (m^3/s^4) per unit plan area, and the extra
+        sink rate eps / k (1/s) of E in wall cells (zero elsewhere).
+    """
+    settings = m.turbulence
+    kappa = m.wall_friction.kappa
+    cell = m.fb_c
+    is_wall, _, _, distance, _, speed, friction_velocity = wall_face_state(m, theta, u, v)
+
+    # Work of the wall shear stress per unit plan area (m^3/s^3): u_*^2 |u_t| h L_f / A.
+    work = is_wall * friction_velocity**2 * speed * h[cell] * m.fb_L
+    k_source = jax.ops.segment_sum(work, cell, m.n_cells) / m.area
+
+    # Log-layer dissipation at the wall-cell centroid, averaged over the cell's wall faces.
+    epsilon_wall_face = settings.c_mu**0.75 * k[cell] ** 1.5 / (kappa * distance)
+    wall_faces = jax.ops.segment_sum(is_wall, cell, m.n_cells)
+    epsilon_wall_sum = jax.ops.segment_sum(is_wall * epsilon_wall_face, cell, m.n_cells)
+    is_wall_cell = wall_faces > 0.0
+    epsilon_wall = epsilon_wall_sum / jnp.maximum(wall_faces, 1.0)
+
+    # Relaxation h (eps_w - eps) eps / k: source h eps_w eps / k, sink rate eps / k.
+    rate = jnp.where(is_wall_cell, epsilon / k, 0.0)
+    epsilon_source = h * epsilon_wall * rate
+    return k_source, epsilon_source, rate
+
+
 def k_epsilon_rates(
     m: SWEModel,
+    theta: Theta,
     h: Array,
     u: Array,
     v: Array,
@@ -229,6 +294,7 @@ def k_epsilon_rates(
 
     Args:
         m: the model (``turbulence`` constants, mesh).
+        theta: differentiable parameters (``wall_ks`` for the wall functions).
         h: water depth (m), shape [n_cells].
         u, v: depth-averaged velocities (m/s), shape [n_cells].
         U: state [xi, q_x, q_y, K, E], shape [5, n_cells].
@@ -286,5 +352,15 @@ def k_epsilon_rates(
     rate_e = (diffusion_e - advection_e) / m.area + source_e
 
     # Sinks -h eps = -(eps / k) K and -c_2 h eps^2 / k = -(c_2 eps / k) E.
-    sink_rates = jnp.stack([epsilon / k, settings.c_2 * epsilon / k])
+    sink_k = epsilon / k
+    sink_e = settings.c_2 * epsilon / k
+
+    # Side-wall functions (only with log-law wall friction; free-slip walls add nothing).
+    if m.wall_friction.mode != "none":
+        wall_k, wall_e, wall_sink = wall_function_terms(m, theta, h, u, v, k, epsilon)
+        rate_k = rate_k + wall_k
+        rate_e = rate_e + wall_e
+        sink_e = sink_e + wall_sink
+
+    sink_rates = jnp.stack([sink_k, sink_e])
     return jnp.stack([rate_k, rate_e]), sink_rates, nu_t

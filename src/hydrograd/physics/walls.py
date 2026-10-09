@@ -58,7 +58,7 @@ from jax import Array
 
 from hydrograd.physics.model import KIND_WALL, SWEModel
 
-__all__ = ["wall_friction_velocity", "wall_shear_source"]
+__all__ = ["wall_face_state", "wall_friction_velocity", "wall_shear_source"]
 
 # Differentiable parameters; ``wall_ks`` (m) overrides the wall roughness.
 Theta = dict[str, Any]
@@ -106,23 +106,27 @@ def wall_friction_velocity(
     return jnp.where(in_sublayer, friction_velocity_viscous, friction_velocity)
 
 
-def wall_shear_source(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array) -> Array:
-    """Momentum source of the wall shear stress, as a contribution to dU/dt.
+def wall_face_state(
+    m: SWEModel, theta: Theta, u: Array, v: Array
+) -> tuple[Array, Array, Array, Array, Array, Array, Array]:
+    """Log-law state of every boundary face (meaningful on WALL faces only).
 
     Args:
-        m: the model (``wall_friction`` settings, boundary faces, cell areas).
+        m: the model (``wall_friction`` settings, boundary faces).
         theta: differentiable parameters; ``wall_ks`` (m) overrides the wall roughness.
-        h: water depth (m), shape [n_cells].
         u, v: depth-averaged velocity components (m/s), shape [n_cells].
 
     Returns:
-        dU/dt contribution [0, S_x, S_y] (m^2/s^2 in the momentum rows), shape
-        [3, n_cells]; zero except in cells with WALL faces.
+        (is_wall, tangent_x, tangent_y, distance, tangential_velocity, speed,
+        friction_velocity), each of shape [n_fb]: 1.0 on WALL faces (else 0.0); the unit
+        tangent t_hat = (-n_y, n_x); the distance y from the cell centroid to the face (m);
+        the tangential velocity u_t (m/s) and its smoothed magnitude (m/s); and the
+        log-law friction velocity u_* (m/s).
     """
     settings = m.wall_friction
 
     # Wall faces: their cells, unit normals and tangents t_hat = (-n_y, n_x).
-    is_wall = (m.fb_kind == KIND_WALL).astype(h.dtype)
+    is_wall = (m.fb_kind == KIND_WALL).astype(u.dtype)
     cell = m.fb_c
     normal_x = m.fb_nx
     normal_y = m.fb_ny
@@ -136,7 +140,7 @@ def wall_shear_source(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array) -
     tangential_velocity = u[cell] * tangent_x + v[cell] * tangent_y
     speed = jnp.sqrt(tangential_velocity * tangential_velocity + SPEED_FLOOR * SPEED_FLOOR)
 
-    # Friction velocity from the log law (m/s); the stress tau_w / rho = u_*^2 (m^2/s^2).
+    # Friction velocity from the log law (m/s).
     ks = theta.get("wall_ks", settings.ks)
     friction_velocity = wall_friction_velocity(
         speed,
@@ -148,6 +152,29 @@ def wall_shear_source(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array) -
         settings.yplus_lam,
         settings.iterations,
     )
+    return (
+        is_wall, tangent_x, tangent_y, distance, tangential_velocity, speed, friction_velocity
+    )
+
+
+def wall_shear_source(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array) -> Array:
+    """Momentum source of the wall shear stress, as a contribution to dU/dt.
+
+    Args:
+        m: the model (``wall_friction`` settings, boundary faces, cell areas).
+        theta: differentiable parameters; ``wall_ks`` (m) overrides the wall roughness.
+        h: water depth (m), shape [n_cells].
+        u, v: depth-averaged velocity components (m/s), shape [n_cells].
+
+    Returns:
+        dU/dt contribution [0, S_x, S_y] (m^2/s^2 in the momentum rows), shape
+        [3, n_cells]; zero except in cells with WALL faces.
+    """
+    cell = m.fb_c
+    (is_wall, tangent_x, tangent_y, _, tangential_velocity, speed,
+     friction_velocity) = wall_face_state(m, theta, u, v)
+
+    # The stress tau_w / rho = u_*^2 (m^2/s^2).
     stress = friction_velocity * friction_velocity
 
     # Force per unit density on the wetted wall area h L_f, against u_t (m^4/s^2).

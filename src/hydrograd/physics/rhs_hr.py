@@ -395,7 +395,7 @@ def rhs_hr(
     k_epsilon = m.turbulence.mode == "k_epsilon"
     if k_epsilon:
         turbulence_rates, turbulence_sinks, nu_ke = k_epsilon_rates(
-            m, h, u, v, U, manning_n, F_h * face_length, G_h * m.fb_L
+            m, theta, h, u, v, U, manning_n, F_h * face_length, G_h * m.fb_L
         )
 
     # Optional horizontal turbulent diffusion div(h nu_t grad u) (explicit part of the

@@ -13,6 +13,11 @@ check:
 4. The IFT gradient of a steady quantity with respect to Manning's n matches central
    differences with the 5-row state.
 5. Explicit SSP-RK3 steps (point-implicit dissipation) keep h k and h epsilon positive.
+6. Side-wall functions (log-law walls): the k production of the wall cells equals the
+   rate at which the wall shear stress removes mean-flow kinetic energy,
+   sum A h P_kW = - sum A (S_x u + S_y v), S the wall momentum source.
+7. Steady narrow flume with log-law walls: the solve converges, and k exceeds the
+   bed-only equilibrium (the walls add production); the colored Jacobian stays exact.
 """
 
 from __future__ import annotations
@@ -28,8 +33,9 @@ from scipy.optimize import brentq
 from hydrograd.apps.setup import setup_case
 from hydrograd.io.control import read_control
 from hydrograd.io.synthetic import write_channel_case
-from hydrograd.physics.k_epsilon import equilibrium, turbulence_variables
+from hydrograd.physics.k_epsilon import equilibrium, turbulence_variables, wall_function_terms
 from hydrograd.physics.rhs import rhs
+from hydrograd.physics.walls import wall_shear_source
 from hydrograd.solvers.final import final_state
 from hydrograd.solvers.jacobian import dense_jacobian, full_jacobian, linearize
 
@@ -58,7 +64,9 @@ def _normal_depth() -> float:
     return brentq(balance, 0.02, 2.0)
 
 
-def _write_flume(case_dir, nx: int, ny: int, solver: str, order: int = 2) -> float:
+def _write_flume(
+    case_dir, nx: int, ny: int, solver: str, order: int = 2, walls: bool = False
+) -> float:
     """Write the sloped flume with the k-epsilon model at its normal depth.
 
     Args:
@@ -66,6 +74,7 @@ def _write_flume(case_dir, nx: int, ny: int, solver: str, order: int = 2) -> flo
         nx, ny: cells along and across.
         solver: ODE solver name (``SteadyNewton()`` or ``SSPRK3()``).
         order: spatial order (1 or 2).
+        walls: smooth log-law side walls (``wall_friction`` block) instead of free-slip.
 
     Returns:
         The normal depth h_n (m).
@@ -94,6 +103,8 @@ def _write_flume(case_dir, nx: int, ny: int, solver: str, order: int = 2) -> flo
     control_path = case_dir / "run_control.json"
     control = json.loads(control_path.read_text())
     control["turbulence"] = {"model": "k_epsilon"}
+    if walls:
+        control["wall_friction"] = {"model": "loglaw", "ks": 0.0}
     control_path.write_text(json.dumps(control, indent=1))
     return h_normal
 
@@ -211,3 +222,54 @@ def test_explicit_steps_keep_turbulence_positive(tmp_path) -> None:
     assert float(jnp.min(U[3])) > 0.0
     assert float(jnp.min(U[4])) > 0.0
     assert np.isfinite(float(jnp.max(jnp.abs(rhs(case.model, {}, U)))))
+
+
+def test_wall_production_equals_wall_shear_work(tmp_path) -> None:
+    """sum A h P_kW = - sum A (S_x u + S_y v) for the log-law wall source S."""
+    # Setup: narrow flume with log-law walls, a sheared flowing state.
+    _write_flume(tmp_path, 10, 4, "SteadyNewton()", walls=True)
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+    y = np.asarray(case.mesh.centroid[:, 1])
+    h = jnp.full(model.n_cells, 0.2)
+    u = jnp.asarray(0.5 + 0.2 * np.sin(np.pi * y / WIDTH))
+    v = jnp.asarray(0.02 * np.cos(np.pi * y / WIDTH))
+    k = jnp.full(model.n_cells, 1.0e-3)
+    epsilon = jnp.full(model.n_cells, 1.0e-4)
+
+    # Run.
+    k_source, _, _ = wall_function_terms(model, {}, h, u, v, k, epsilon)
+    source = wall_shear_source(model, {}, h, u, v)
+
+    # Compare the area integrals (m^5/s^3).
+    area = np.asarray(model.area)
+    production = float(np.sum(area * np.asarray(k_source)))
+    work = -float(np.sum(area * np.asarray(source[1] * u + source[2] * v)))
+    assert production > 0.0
+    np.testing.assert_allclose(production, work, rtol=1e-10)
+
+
+def test_steady_flume_with_wall_functions(tmp_path) -> None:
+    """Log-law walls: the steady solve converges and k exceeds the bed-only equilibrium."""
+    # Setup: narrow flume, 3 cells across, log-law walls.
+    _write_flume(tmp_path, 40, 3, "SteadyNewton()", walls=True)
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+
+    # Run.
+    U, converged = final_state(model, {}, case.U0, case.ode)
+    assert bool(converged)
+
+    # Compare in the middle of the flume: the wall cells carry extra production.
+    h = U[0] + model.hstill
+    k, _, _ = turbulence_variables(model, h, U)
+    speed = jnp.sqrt(U[1] ** 2 + U[2] ** 2) / h
+    k_bed, _ = equilibrium(model, h, speed, jnp.full(model.n_cells, N_MANNING))
+    x = np.asarray(case.mesh.centroid[:, 0])
+    middle = np.abs(x - 0.5 * LENGTH) < 0.1 * LENGTH
+    assert np.all(np.asarray(k)[middle] > np.asarray(k_bed)[middle])
+
+    # The colored Jacobian with the wall functions equals the dense one.
+    compressed, A, C = jax.jit(lambda state: linearize(model, {}, state))(U)
+    J = full_jacobian(model, np.asarray(compressed), np.asarray(A), np.asarray(C))
+    np.testing.assert_allclose(J, dense_jacobian(model, {}, U), rtol=1e-10, atol=1e-12)
