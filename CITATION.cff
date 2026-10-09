@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use Hydrograd, please cite the software and the model description paper."
+title: "Hydrograd: a differentiable two-dimensional shallow-water model on unstructured meshes"
+version: 1.0.0
+license: MIT
+repository-code: "https://github.com/psu-efd/Hydrograd"
+authors:
+  - family-names: Liu
+    given-names: Xiaofeng
+    affiliation: "The Pennsylvania State University"
+keywords:
+  - shallow water equations
+  - differentiable modelling
+  - automatic differentiation
+  - adjoint
+  - unstructured mesh
+  - flow resistance
+  - JAX
+references:
+  - type: article
+    authors:
+      - family-names: Liu
+        given-names: Xiaofeng
+      - family-names: Song
+        given-names: Yalan
+    title: "Scientific machine learning of flow resistance using universal shallow water equations with differentiable programming"
+    journal: "Water Resources Research"
+    year: 2025
+    doi: "10.1029/2025WR040265"

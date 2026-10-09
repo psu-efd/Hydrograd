@@ -1,0 +1,32 @@
+{
+ "cells": 16000,
+ "spatial_order": 2,
+ "solver": "SSPRK3() CFL-limited",
+ "time_steps": 402540,
+ "simulated_h": 6.0,
+ "hardware": "NVIDIA A100-PCIE-40GB",
+ "wall_s": 249.04041507467628,
+ "wall_first_call_incl_compile_s": 253.06105553358793,
+ "wall_s_report_4b_first_order_cfl05": 88.4,
+ "q_in_peak_m3s": 400.0,
+ "q_in_peak_time_h": 1.5,
+ "q_out_peak_m3s": 385.2697318994127,
+ "q_out_peak_time_h": 1.7712068980369666,
+ "peak_attenuation_m3s": 14.730268100587296,
+ "peak_attenuation_pct": 3.682567025146824,
+ "peak_lag_min": 16.272413882217993,
+ "q_out_peak_from_exit_column_m3s": 384.024771674894,
+ "q_out_peak_time_from_exit_column_h": 1.7695214699969297,
+ "inundated_pct_initial": 25.0,
+ "inundated_pct_max": 70.325,
+ "inundated_max_time_h": 1.55,
+ "inundated_pct_final": 25.0,
+ "min_depth_m": -1.7763568394002505e-15,
+ "storage_change_m3": 0.46011579773039557,
+ "snapshot_times_h": [
+  0.0,
+  1.0,
+  1.5,
+  3.0
+ ]
+}

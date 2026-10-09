@@ -1,0 +1,126 @@
+{
+ "calibrations": {
+  "force": {
+   "loss_terms": [
+    "patch"
+   ],
+   "CD_patch1": 0.6842414299291457,
+   "CD_patch2": 0.7391221467566665,
+   "patch_force_N": [
+    28.15802268805417,
+    12.051329265929187
+   ],
+   "patch_force_error_pct": [
+    6.411731146016564e-08,
+    -1.1675731492744035e-07
+   ],
+   "row_force_rms_error_N": 0.4046716231981946,
+   "rms_U_outside_m_s": 0.03922762917532868,
+   "rms_eta_outside_mm": 1.9491776949249158
+  },
+  "field": {
+   "loss_terms": [
+    "fields"
+   ],
+   "CD_patch1": 0.9920423677402251,
+   "CD_patch2": 0.2369743545432962,
+   "patch_force_N": [
+    34.2018485932046,
+    3.6868771375428535
+   ],
+   "patch_force_error_pct": [
+    21.46395716075542,
+    -69.40688407160629
+   ],
+   "row_force_rms_error_N": 0.6010327919671047,
+   "rms_U_outside_m_s": 0.03833674859205913,
+   "rms_eta_outside_mm": 1.0892663084748995
+  }
+ },
+ "case": {
+  "description": "two 0.5 m patches in tandem, 15 x 15 stems, d = 0.01 m, dS = 0.0333 m",
+  "a_per_m": 9.000000000018002,
+  "cfd_patch_force_N": [
+   28.15802267,
+   12.051329279999996
+  ],
+  "cfd_sheltering_F2_over_F1": 0.427989188773531,
+  "cfd_first_last_row_force_patch1_N": [
+   4.5289429,
+   1.0319047
+  ],
+  "cfd_CD_local_mean_per_patch": [
+   0.8354790920499795,
+   0.8488286307757366
+  ],
+  "cfd_head_loss_mm": 16.1158354870391,
+  "n_bed": 0.012347623783735275,
+  "swe_grid": [
+   180,
+   45
+  ]
+ },
+ "field_plus_interior_fit": {
+  "source": "cd_multidensity_none_zone_dense-zone-fieldsint.json",
+  "loss_terms": [
+   "fields",
+   "interior"
+  ],
+  "walls": true,
+  "eddy": false,
+  "CD_zone": [
+   1.0,
+   1.0,
+   0.9982516371416419,
+   0.24769966684974812
+  ],
+  "patch_force_error_pct": [
+   21.768240947328167,
+   -68.35512791689405
+  ],
+  "rms_U_outside_m_s": 0.037895563443091355,
+  "rms_eta_outside_mm": 1.1011305103709912
+ },
+ "recorded_fit_metrics": {
+  "force": {
+   "source": "cd_multidensity_none_zone_dense-zone-patch.json",
+   "loss_terms": [
+    "patch"
+   ],
+   "walls": true,
+   "eddy": false,
+   "CD_zone": [
+    1.0,
+    1.0,
+    0.6842414299291457,
+    0.7391221467566665
+   ],
+   "patch_force_error_pct": [
+    6.411720043786318e-08,
+    -1.1675731492744035e-07
+   ],
+   "rms_U_outside_m_s": 0.03922762917532295,
+   "rms_eta_outside_mm": 1.949177694924841
+  },
+  "field": {
+   "source": "cd_multidensity_none_zone_dense-zone-fields.json",
+   "loss_terms": [
+    "fields"
+   ],
+   "walls": true,
+   "eddy": false,
+   "CD_zone": [
+    1.0,
+    1.0,
+    0.9920423677402251,
+    0.2369743545432962
+   ],
+   "patch_force_error_pct": [
+    21.463957160755598,
+    -69.40688407160624
+   ],
+   "rms_U_outside_m_s": 0.03833674859205887,
+   "rms_eta_outside_mm": 1.0892663084749004
+  }
+ }
+}

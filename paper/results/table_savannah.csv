@@ -1,0 +1,8 @@
+code,hardware,forward_s,gradient_mode,gradient_s
+Hydrograd.jl,"Xeon Gold 6342, 1 thread",20.398508921,forward,99.22572534000001
+Hydrograd v1.0,"Xeon Gold 6342, 1 core",1.7835556529462337,forward,245.9402720015496
+Hydrograd v1.0,"Xeon Gold 6342, 1 core",1.7835556529462337,reverse,10.778588738292456
+Hydrograd v1.0,"Xeon Gold 6342, 8 cores",1.5104938875883818,forward,82.25946371629834
+Hydrograd v1.0,"Xeon Gold 6342, 8 cores",1.5104938875883818,reverse,8.466389411129057
+Hydrograd v1.0,A100-PCIE-40GB,0.187709117308259,forward,0.7098348317667842
+Hydrograd v1.0,A100-PCIE-40GB,0.187709117308259,reverse,1.166964597068727

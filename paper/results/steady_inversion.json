@@ -1,0 +1,359 @@
+{
+  "inversions": {
+    "steady": {
+      "spatial_order": 2,
+      "solver": "SteadyNewton()",
+      "optimizers": [
+        "Adam",
+        "LBFGS"
+      ],
+      "learning_rates": [
+        0.001,
+        1.0
+      ],
+      "max_iterations": [
+        30,
+        50
+      ],
+      "gradient_mode_first_order_stage": "reverse (IFT)",
+      "truth_file": "steady_truth.json",
+      "tspan_s": [
+        0.0,
+        200.0
+      ],
+      "n_iterations": 44,
+      "n_adam_iterations": 30,
+      "wall_time_total_s": 139.4358042627573,
+      "time_to_first_iteration_s": 6.794878003187478,
+      "time_per_iteration_after_first_s": 2.9984583438966763,
+      "loss_initial": 0.0476317303231715,
+      "loss_final": 2.01736117446893e-19,
+      "n_initial": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "n_final": [
+        0.04000000001818179,
+        0.049999999889292414,
+        0.0300000000051057,
+        0.04500000010576103,
+        0.0500000000584551
+      ],
+      "n_truth": [
+        0.04,
+        0.05,
+        0.03,
+        0.045,
+        0.05
+      ],
+      "max_abs_n_error": 1.1070758892950394e-10
+    },
+    "transient": {
+      "spatial_order": 2,
+      "solver": "Tsit5()",
+      "optimizers": [
+        "Adam",
+        "LBFGS"
+      ],
+      "learning_rates": [
+        0.001,
+        1.0
+      ],
+      "max_iterations": [
+        30,
+        50
+      ],
+      "gradient_mode_first_order_stage": "AutoZygote()",
+      "truth_file": "transient_truth.json",
+      "tspan_s": [
+        0.0,
+        200.0
+      ],
+      "n_iterations": 40,
+      "n_adam_iterations": 30,
+      "wall_time_total_s": 523.6085381507874,
+      "time_to_first_iteration_s": 16.04487014748156,
+      "time_per_iteration_after_first_s": 12.680854653241113,
+      "loss_initial": 0.0214066296698032,
+      "loss_final": 7.79348085811807e-18,
+      "n_initial": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "n_final": [
+        0.040000000075019956,
+        0.04999999977144715,
+        0.030000000172888862,
+        0.04499999930364279,
+        0.050000000640491926
+      ],
+      "n_truth": [
+        0.04,
+        0.05,
+        0.03,
+        0.045,
+        0.05
+      ],
+      "max_abs_n_error": 6.963572080076474e-10
+    },
+    "steady_o1": {
+      "spatial_order": 1,
+      "solver": "SteadyNewton()",
+      "optimizers": [
+        "Adam",
+        "LBFGS"
+      ],
+      "learning_rates": [
+        0.001,
+        1.0
+      ],
+      "max_iterations": [
+        30,
+        50
+      ],
+      "gradient_mode_first_order_stage": "AutoZygote()",
+      "truth_file": "steady_truth.json",
+      "tspan_s": [
+        0.0,
+        200.0
+      ],
+      "n_iterations": 42,
+      "n_adam_iterations": 30,
+      "wall_time_total_s": 27.262376364320517,
+      "time_to_first_iteration_s": 3.0634472873061895,
+      "time_per_iteration_after_first_s": 0.5699144184722432,
+      "loss_initial": 0.0329175844695612,
+      "loss_final": 1.3368350322033e-19,
+      "n_initial": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "n_final": [
+        0.04000000008607648,
+        0.04999999994004308,
+        0.03000000000859114,
+        0.045000000064879156,
+        0.050000000007800575
+      ],
+      "n_truth": [
+        0.04,
+        0.05,
+        0.03,
+        0.045,
+        0.05
+      ],
+      "max_abs_n_error": 8.607647927760809e-11
+    },
+    "transient_o1": {
+      "spatial_order": 1,
+      "solver": "Tsit5()",
+      "optimizers": [
+        "Adam",
+        "LBFGS"
+      ],
+      "learning_rates": [
+        0.001,
+        1.0
+      ],
+      "max_iterations": [
+        30,
+        50
+      ],
+      "gradient_mode_first_order_stage": "AutoZygote()",
+      "truth_file": "transient_truth.json",
+      "tspan_s": [
+        0.0,
+        200.0
+      ],
+      "n_iterations": 40,
+      "n_adam_iterations": 30,
+      "wall_time_total_s": 265.9298972589895,
+      "time_to_first_iteration_s": 9.514126124791801,
+      "time_per_iteration_after_first_s": 6.403899547271431,
+      "loss_initial": 0.0143044609802969,
+      "loss_final": 9.01043225969781e-19,
+      "n_initial": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "n_final": [
+        0.03999999991068942,
+        0.05000000036749113,
+        0.029999999946036183,
+        0.044999999784028404,
+        0.04999999991751166
+      ],
+      "n_truth": [
+        0.04,
+        0.05,
+        0.03,
+        0.045,
+        0.05
+      ],
+      "max_abs_n_error": 3.6749112780620763e-10
+    },
+    "julia300": {
+      "spatial_order": 1,
+      "solver": "Tsit5()",
+      "optimizers": [
+        "Adam",
+        "LBFGS"
+      ],
+      "learning_rates": [
+        0.001,
+        0.01
+      ],
+      "max_iterations": [
+        300,
+        0
+      ],
+      "gradient_mode_first_order_stage": "AutoForwardDiff()",
+      "truth_file": "forward_simulation_solution_truth.json",
+      "tspan_s": [
+        0.0,
+        200.0
+      ],
+      "n_iterations": 251,
+      "n_adam_iterations": 251,
+      "wall_time_total_s": 578.6564144818112,
+      "time_to_first_iteration_s": 4.599271399900317,
+      "time_per_iteration_after_first_s": 2.2869103929636427,
+      "loss_initial": 0.013080705642626,
+      "loss_final": 0.00387154814694151,
+      "n_initial": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "n_final": [
+        0.034315322949945444,
+        0.04779466903518469,
+        0.029666980633256068,
+        0.04001650448933757,
+        0.04500980854629691
+      ],
+      "n_truth": [
+        0.04,
+        0.05,
+        0.03,
+        0.045,
+        0.05
+      ],
+      "max_abs_n_error": 0.005684677050054557
+    }
+  },
+  "machine": {
+    "cpu_model": "Intel(R) Xeon(R) Gold 6342 CPU @ 2.80GHz",
+    "cores_available": 8,
+    "slurm_job_id": "56200220",
+    "slurm_cpus_on_node": "8",
+    "host": "p-sc-2179",
+    "python": "3.12.15"
+  },
+  "gradient_check": {
+    "fd_step": 1e-06,
+    "points": {
+      "start": {
+        "n": [
+          0.02,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03
+        ],
+        "loss": 0.047631730323171514,
+        "grad_ift": [
+          -0.8562217157680707,
+          -2.280221783110046,
+          -2.473120810484918,
+          -0.6524872889483343,
+          -1.6015927394530693
+        ],
+        "grad_fd": [
+          -0.856221712725036,
+          -2.2802217788560344,
+          -2.4731208139346097,
+          -0.6524872962557215,
+          -1.601592748218944
+        ],
+        "relative_difference": [
+          3.5540265656389196e-09,
+          1.8656131824218213e-09,
+          1.394873887282987e-09,
+          1.1199278963418392e-08,
+          5.47322326635935e-09
+        ]
+      },
+      "intermediate": {
+        "n": [
+          0.02,
+          0.036,
+          0.044,
+          0.034,
+          0.041,
+          0.043
+        ],
+        "loss": 0.0026305009824458274,
+        "grad_ift": [
+          -0.2753397881074898,
+          -0.3462320380119757,
+          0.04912800245948414,
+          -0.0950671069886414,
+          -0.2578980220224148
+        ],
+        "grad_fd": [
+          -0.27533978947487037,
+          -0.34623203808864006,
+          0.04912800201828556,
+          -0.09506710733258109,
+          -0.2578980222273618
+        ],
+        "relative_difference": [
+          4.966156706720744e-09,
+          2.2142474730231722e-10,
+          8.980592869351293e-09,
+          3.61786207596442e-09,
+          7.946823401060044e-10
+        ]
+      }
+    },
+    "max_relative_difference": 1.1199278963418392e-08
+  },
+  "gradient_cost_s": {
+    "steady_ift_reverse": {
+      "first_call_incl_compile": 1.4947420200333,
+      "warm_median": 1.5000647529959679
+    },
+    "transient_reverse_checkpoint": {
+      "first_call_incl_compile": 16.16817218530923,
+      "warm_median": 8.258586674928665
+    },
+    "transient_forward_mode": {
+      "first_call_incl_compile": 22.382133825682104,
+      "warm_median": 18.635950015857816
+    }
+  },
+  "speed_up_steady_vs_transient_same_stages_order2": 3.75519430550336,
+  "speed_up_steady_vs_transient_same_stages_order1": 9.754465043884574,
+  "speed_up_steady_order1_vs_julia300_order1": 21.22545763248741,
+  "reported_earlier": {
+    "steady_total_s": 37.0,
+    "transient_300_adam_min": 9.0,
+    "source": "plan/phase1_parity_report.md section 6b (8-core Roar CPU node, first-order scheme, before second order was the default)"
+  }
+}

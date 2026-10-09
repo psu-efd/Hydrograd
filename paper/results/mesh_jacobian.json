@@ -1,0 +1,84 @@
+{
+  "case": "Savannah River (Hydrograd.jl example, SRH-2D mesh savana_SI.srhgeom)",
+  "n_cells": 1306,
+  "n_faces": 2737,
+  "n_interior_faces": 2461,
+  "n_nodes": 1432,
+  "cell_types": {
+    "triangles": 26,
+    "quadrilaterals": 1280
+  },
+  "zones": [
+    {
+      "id": 0,
+      "name": "Default",
+      "manning_n": 0.02,
+      "n_cells": 0
+    },
+    {
+      "id": 1,
+      "name": "zone_1",
+      "manning_n": 0.04,
+      "n_cells": 321
+    },
+    {
+      "id": 2,
+      "name": "zone_2",
+      "manning_n": 0.05,
+      "n_cells": 246
+    },
+    {
+      "id": 3,
+      "name": "main_channel",
+      "manning_n": 0.03,
+      "n_cells": 406
+    },
+    {
+      "id": 4,
+      "name": "zone_3",
+      "manning_n": 0.045,
+      "n_cells": 70
+    },
+    {
+      "id": 5,
+      "name": "zone_4",
+      "manning_n": 0.05,
+      "n_cells": 263
+    }
+  ],
+  "cell_size_sqrt_area_m": [
+    5.414565479340919,
+    12.10853698759534
+  ],
+  "boundaries": {
+    "1": {
+      "type": "INLET-Q",
+      "n_faces": 10
+    },
+    "2": {
+      "type": "EXIT-H",
+      "n_faces": 10
+    },
+    "3": {
+      "type": "WALL",
+      "n_faces": 128
+    },
+    "4": {
+      "type": "WALL",
+      "n_faces": 128
+    }
+  },
+  "n_colours_order1": 9,
+  "n_colours_order2": 24,
+  "n_jvps_order2": 72,
+  "n_unknowns": 3918,
+  "nnz_structural_order1": 56052,
+  "nnz_structural_order2": 139788,
+  "nnz_numerical_order2_at_srh2d_state": 139788,
+  "nnz_per_row_order2": 35.67840735068913,
+  "density_order2": 0.00910628058976241,
+  "n_inlets": 1,
+  "nnz_low_rank_inlet_term": 300,
+  "nnz_low_rank_outside_local_pattern": 168,
+  "note": "Jacobian evaluated at the SRH-2D steady state with the default scheme hr_hllc, second-order MUSCL (Venkatakrishnan limiter). dR/dU = J_local + A C^T with A C^T the inlet conveyance coupling (rank n_inlets)."
+}

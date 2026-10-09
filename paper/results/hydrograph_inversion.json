@@ -1,0 +1,48 @@
+{
+ "cells": 500,
+ "domain_m": [
+  1000.0,
+  200.0
+ ],
+ "true_peak_m3s": 350.0,
+ "true_time_to_peak_min": 45.0,
+ "gauges": 3,
+ "stage_rise_at_gauges_m": [
+  1.9284924145675097,
+  1.822210953564202,
+  1.5736262090867037
+ ],
+ "observation_interval_min": 5.0,
+ "knots": 9,
+ "knot_spacing_min": 15.0,
+ "inversion_model": "implicit backward Euler, dt = 60 s, per-step IFT adjoint",
+ "truth_model": "explicit SSPRK3, second order, CFL steps",
+ "optimizer": "L-BFGS (optax, zoom line search)",
+ "hardware": "NVIDIA A100-PCIE-40GB (Roar)",
+ "runs": {
+  "noise_0mm": {
+   "iterations": 25,
+   "wall_s": 619.2094763005152,
+   "q_rms_error_m3s": 10.962606444856473,
+   "q_peak_recovered_m3s": 356.74999760602157,
+   "peak_error_pct": 1.9285707445775901,
+   "time_of_recovered_peak_min": 45.0,
+   "loss_initial_m2": 1.43093467698235,
+   "loss_final_m2": 0.0007086636544819228,
+   "rms_stage_misfit_last_iterate_mm": 26.620737301621133,
+   "rms_stage_misfit_final_q_recomputed_mm": 25.7497090907441
+  },
+  "noise_5mm": {
+   "iterations": 25,
+   "wall_s": 656.269246536307,
+   "q_rms_error_m3s": 8.928239291800189,
+   "q_peak_recovered_m3s": 356.29880918310164,
+   "peak_error_pct": 1.7996597666004683,
+   "time_of_recovered_peak_min": 45.0,
+   "loss_initial_m2": 1.4324684277690523,
+   "loss_final_m2": 0.00024249831882169705,
+   "rms_stage_misfit_last_iterate_mm": 15.572357522921733,
+   "rms_stage_misfit_final_q_recomputed_mm": 15.050728185156148
+  }
+ }
+}

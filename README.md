@@ -9,6 +9,8 @@ doi:10.1029/2025WR040265).
 - **Modes:** forward simulation, sensitivity analysis, inversion (Manning's n, bed elevation, inflow) and UDE training.
 - **Hardware:** CPU and GPU (JAX, float64).
 
+**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The examples of the model description paper (Liu, *Hydrograd v1.0*, Geoscientific Model Development, in preparation), with the scripts that reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff).
+
 ## Install
 
 ```bash
