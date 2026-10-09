@@ -452,9 +452,12 @@ def _turbulence(ctrl: Control) -> Turbulence:
 
         "turbulence": {"model": "parabolic", "coefficient": 0.7, "nu0": 1e-6}
         "turbulence": {"model": "constant", "nu_t": 0.01}
+        "turbulence": {"model": "mixing_length", "coefficient": 0.7,
+                       "mixing_coefficient": 0.3}
 
     The parabolic model is nu_t = C_t u_* h + nu_0 (SRH-2D); C_t is differentiable as
-    ``theta["eddy_Ct"]``.
+    ``theta["eddy_Ct"]``. The mixing-length model adds (C_m h)^2 |S| (``mixing_coefficient``
+    = C_m, differentiable as ``theta["eddy_Cm"]``).
 
     Args:
         ctrl: run control.
@@ -467,14 +470,18 @@ def _turbulence(ctrl: Control) -> Turbulence:
         return Turbulence()
 
     model = block.get("model", "parabolic")
-    if model not in ("parabolic", "constant"):
-        raise ValueError(f"turbulence.model must be 'parabolic' or 'constant', got {model!r}")
+    if model not in ("parabolic", "constant", "mixing_length"):
+        raise ValueError(
+            "turbulence.model must be 'parabolic', 'constant' or 'mixing_length', "
+            f"got {model!r}"
+        )
 
     return Turbulence(
         mode=model,
         coefficient=float(block.get("coefficient", 0.7)),
         nu0=float(block.get("nu0", 1.0e-6)),
         nu_constant=float(block.get("nu_t", 0.0)),
+        mixing_coefficient=float(block.get("mixing_coefficient", 0.0)),
     )
 
 

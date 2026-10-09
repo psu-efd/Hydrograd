@@ -140,19 +140,26 @@ class Turbulence:
 
     - ``parabolic``: nu_t = C_t u_* h + nu_0, where u_* = sqrt(g) n |u| / (k_n h^(1/6)) is
       the bed friction velocity (m/s) (the SRH-2D parabolic model, C_t = 0.7 by default);
-    - ``constant``: nu_t = ``nu_constant`` + nu_0.
+    - ``constant``: nu_t = ``nu_constant`` + nu_0;
+    - ``mixing_length``: the parabolic model plus a shear-generated part,
+      nu_t = C_t u_* h + (C_m h)^2 |S| + nu_0, with |S| = sqrt(2 S_ij S_ij) (1/s) the
+      magnitude of the depth-averaged strain rate and C_m h the mixing length (m).
 
     Attributes:
-        mode: ``none`` (no turbulent diffusion, default), ``parabolic`` or ``constant``.
-        coefficient: C_t of the parabolic model (-); differentiable as ``theta["eddy_Ct"]``.
+        mode: ``none`` (no turbulent diffusion, default), ``parabolic``, ``constant`` or
+            ``mixing_length``.
+        coefficient: C_t of the parabolic part (-); differentiable as ``theta["eddy_Ct"]``.
         nu0: background (molecular) viscosity nu_0 (m^2/s).
         nu_constant: eddy viscosity of the ``constant`` model (m^2/s).
+        mixing_coefficient: C_m of the ``mixing_length`` model (-), mixing length / depth;
+            differentiable as ``theta["eddy_Cm"]``.
     """
 
     mode: str = "none"
     coefficient: float = 0.7
     nu0: float = 1.0e-6
     nu_constant: float = 0.0
+    mixing_coefficient: float = 0.0
 
 
 @dataclass(frozen=True)

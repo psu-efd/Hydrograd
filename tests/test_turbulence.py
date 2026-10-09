@@ -11,6 +11,13 @@ The momentum equations get div(h nu_t grad u). The tests check:
 3. The derivative with respect to the parabolic-model coefficient ``theta["eddy_Ct"]``
    matches central differences.
 4. A model without a ``"turbulence"`` block has no diffusion (mode ``none``).
+5. Mixing-length model, nu_t = C_t u_* h + (C_m h)^2 |S| + nu_0: in a linear shear flow
+   u = gamma y the strain-rate magnitude |S| equals gamma in the cells away from the
+   walls, so nu_t = (C_m h)^2 gamma for C_t = nu_0 = 0.
+6. With C_m = 0 the mixing-length model gives the parabolic residual bit for bit.
+7. The mixing-length viscosity widens the residual stencil to two cells; the colored sparse
+   Jacobian then still equals the dense jacfwd Jacobian with first-order numerics.
+8. The derivative with respect to ``theta["eddy_Cm"]`` matches central differences.
 """
 
 from __future__ import annotations
@@ -26,7 +33,9 @@ from hydrograd.apps.setup import setup_case
 from hydrograd.io.control import read_control
 from hydrograd.io.synthetic import write_channel_case
 from hydrograd.physics.model import Turbulence
-from hydrograd.physics.turbulence import turbulent_diffusion
+from hydrograd.physics.rhs import rhs
+from hydrograd.physics.turbulence import eddy_viscosity, turbulent_diffusion
+from hydrograd.solvers.jacobian import dense_jacobian, full_jacobian, linearize
 
 WIDTH = 10.0            # m
 DEPTH = 0.5             # m
@@ -131,3 +140,96 @@ def test_no_turbulence_block_means_no_diffusion(tmp_path) -> None:
 
     with_block = dataclasses.replace(case.model, turbulence=Turbulence(mode="constant", nu_constant=NU_T))
     assert with_block.turbulence.mode == "constant"
+
+
+def test_mixing_length_viscosity_in_linear_shear(tmp_path) -> None:
+    """u = gamma y: nu_t = (C_m h)^2 gamma away from the walls (C_t = nu_0 = 0)."""
+    # Setup: mixing-length model without the parabolic and background parts.
+    mixing_coefficient = 0.4
+    gamma = 0.05                                       # shear rate du/dy (1/s)
+    block = {
+        "model": "mixing_length",
+        "coefficient": 0.0,
+        "nu0": 0.0,
+        "mixing_coefficient": mixing_coefficient,
+    }
+    case, y = _flat_channel_model(tmp_path, block)
+    model = case.model
+    h = jnp.full(model.n_cells, DEPTH)
+    u = jnp.asarray(gamma * y)
+    v = jnp.zeros(model.n_cells)
+    n = jnp.full(model.n_cells, 0.03)
+
+    # Run.
+    nu_t = np.asarray(eddy_viscosity(model, {}, h, u, v, n))
+
+    # Compare in the cells not next to a wall (Green-Gauss is exact there for a linear field).
+    dy = WIDTH / NY
+    interior = (y > dy) & (y < WIDTH - dy)
+    expected = (mixing_coefficient * DEPTH) ** 2 * np.sqrt(gamma**2 + 1e-12)
+    np.testing.assert_allclose(nu_t[interior], expected, rtol=1e-12)
+
+
+def test_mixing_length_with_zero_coefficient_is_parabolic(tmp_path) -> None:
+    """C_m = 0: the mixing-length residual equals the parabolic residual bit for bit."""
+    # Setup: the same case with both models.
+    case, _ = _flat_channel_model(tmp_path, {"model": "parabolic", "coefficient": 0.7})
+    parabolic = case.model
+    mixing = dataclasses.replace(
+        parabolic,
+        turbulence=dataclasses.replace(
+            parabolic.turbulence, mode="mixing_length", mixing_coefficient=0.0
+        ),
+    )
+    U = case.U0 + 0.01 * jnp.sin(jnp.arange(3 * parabolic.n_cells).reshape(3, -1) * 0.3)
+
+    # Run and compare.
+    np.testing.assert_array_equal(np.asarray(rhs(parabolic, {}, U)), np.asarray(rhs(mixing, {}, U)))
+
+
+def test_mixing_length_sparse_jacobian_first_order(tmp_path) -> None:
+    """First-order numerics + mixing length: colored Jacobian = dense Jacobian."""
+    # Setup: small first-order channel with the mixing-length model and a sheared state.
+    write_channel_case(tmp_path, 6, 5, length=6.0, width=2.5, slope=0.0, bump=0.0,
+                       Q=0.5, wse_out=DEPTH, order=1)
+    control_path = tmp_path / "run_control.json"
+    control = json.loads(control_path.read_text())
+    control["turbulence"] = {"model": "mixing_length", "coefficient": 0.7,
+                             "mixing_coefficient": 0.5}
+    control_path.write_text(json.dumps(control, indent=1))
+    case = setup_case(read_control(control_path))
+    model = case.model
+    assert model.order == 1
+    U = case.U0 + 0.05 * jnp.sin(jnp.arange(3 * model.n_cells).reshape(3, -1) * 0.7)
+
+    # Run: sparse Jacobian from the colored linearization, and the dense reference.
+    compressed, A, C = jax.jit(lambda state: linearize(model, {}, state))(U)
+    J = full_jacobian(model, np.asarray(compressed), np.asarray(A), np.asarray(C))
+
+    # Compare.
+    np.testing.assert_allclose(J, dense_jacobian(model, {}, U), atol=1e-12)
+
+
+def test_gradient_wrt_mixing_coefficient(tmp_path) -> None:
+    """d(sum of squared rates)/d(C_m) by AD matches central differences (rtol 1e-6)."""
+    # Setup: mixing-length model, a shear layer across the channel.
+    block = {"model": "mixing_length", "coefficient": 0.7, "mixing_coefficient": 0.3}
+    case, y = _flat_channel_model(tmp_path, block)
+    model = case.model
+    h = jnp.full(model.n_cells, DEPTH)
+    u = jnp.asarray(U0 * (1.0 + np.tanh((y - 0.5 * WIDTH) / 1.0)))
+    v = jnp.zeros(model.n_cells)
+    n = jnp.full(model.n_cells, 0.03)
+
+    def objective(coefficient: jax.Array) -> jax.Array:
+        """Sum of squared x-momentum rates (m^4/s^4) for C_m = coefficient."""
+        rate = turbulent_diffusion(model, {"eddy_Cm": coefficient}, h, u, v, n)
+        return jnp.sum(rate[1] ** 2)
+
+    # Run: AD gradient and central differences.
+    gradient = float(jax.grad(objective)(0.3))
+    step = 1e-4
+    finite_difference = float((objective(0.3 + step) - objective(0.3 - step)) / (2 * step))
+
+    # Compare.
+    np.testing.assert_allclose(gradient, finite_difference, rtol=1e-6)

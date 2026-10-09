@@ -70,8 +70,8 @@ def _cell_adjacency(m: SWEModel) -> sp.csr_matrix:
 
     Returns:
         Boolean CSR matrix, shape [n_cells, n_cells]; entry (i, j) is True if R_i may
-        depend on U_j. First order: face neighbours; second order: neighbours of
-        neighbours.
+        depend on U_j. First order: face neighbours; second order or the mixing-length
+        eddy viscosity: neighbours of neighbours.
     """
     n = m.n_cells
     owner = np.asarray(m.fi_o)
@@ -84,9 +84,11 @@ def _cell_adjacency(m: SWEModel) -> sp.csr_matrix:
     A = sp.csr_matrix((values, (rows, cols)), shape=(n, n))
     A.sum_duplicates()
 
-    # MUSCL: R_i depends on its neighbours' gradients, so the stencil is two cells wide.
-    # The pattern of A @ A is that two-cell stencil.
-    if getattr(m, "order", 1) == 2:
+    # MUSCL, and the mixing-length eddy viscosity: R_i depends on its neighbours'
+    # gradients, so the stencil is two cells wide. The pattern of A @ A is that stencil.
+    turbulence = getattr(m, "turbulence", None)
+    mixing_length = turbulence is not None and turbulence.mode == "mixing_length"
+    if getattr(m, "order", 1) == 2 or mixing_length:
         A_int = A.astype(np.int32)
         A = (A_int @ A_int).astype(bool).tocsr()
 

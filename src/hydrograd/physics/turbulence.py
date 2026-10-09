@@ -13,7 +13,13 @@ with the depth-averaged eddy viscosity nu_t (m^2/s). Two models:
   where u_* = sqrt(tau_b / rho) = sqrt(g) n |u| / (k_n h^(1/6)) is the bed friction
   velocity (m/s) from Manning's law, C_t ~ 0.7 (Rodi 1993; SRH-2D default), and nu_0 the
   background viscosity;
-- constant:            nu_t = nu_constant + nu_0.
+- constant:            nu_t = nu_constant + nu_0;
+- mixing length:       nu_t = C_t u_* h + (C_m h)^2 |S| + nu_0,
+  the parabolic (bed-generated) part plus a shear-generated part (Prandtl's mixing
+  length l = C_m h). |S| = sqrt(2 S_ij S_ij) = sqrt(2 u_x^2 + 2 v_y^2 + (u_y + v_x)^2)
+  (1/s) is the magnitude of the depth-averaged strain rate, from Green-Gauss cell
+  gradients. It concentrates the mixing in shear layers (patch edges, wakes), where
+  the parabolic model, set by the bed friction alone, is nearly uniform.
 
 The term spreads momentum across shear layers, e.g. the wake behind a vegetation patch or
 a channel-floodplain interface. Without it, depth-averaged wakes do not recover.
@@ -27,8 +33,10 @@ Finite volumes on the interior faces, with a two-point normal gradient:
 where h_f = min(h_L, h_R) (no diffusion into dry cells) and nu_f is the mean of the two
 cell viscosities. The owner cell gains flux_f and the neighbour loses it, so momentum is
 conserved exactly. Boundary faces carry no diffusive flux (free-slip walls; inlet and
-exit fluxes are imposed by the boundary conditions). The stencil is the face-neighbour
-stencil, so the Jacobian sparsity pattern of the scheme does not change.
+exit fluxes are imposed by the boundary conditions). The parabolic and constant models
+use the face-neighbour stencil. In the mixing-length model nu_t depends on the
+neighbours' velocities through |S|, so the stencil is two cells wide, like second-order
+MUSCL (``solvers.jacobian`` widens the sparsity pattern for it).
 
 The two-point gradient is exact on orthogonal meshes and first order on skewed ones (no
 non-orthogonal correction); adequate for the diffusion term, which is small next to the
@@ -44,6 +52,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from hydrograd.physics.model import SWEModel
+from hydrograd.physics.reconstruct import green_gauss
 
 __all__ = ["eddy_viscosity", "turbulent_diffusion"]
 
@@ -57,7 +66,7 @@ def eddy_viscosity(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
 
     Args:
         m: the model (``turbulence`` settings, ``g``, ``k_n``, ``h_small``).
-        theta: differentiable parameters (``eddy_Ct`` overrides C_t).
+        theta: differentiable parameters (``eddy_Ct`` overrides C_t, ``eddy_Cm`` C_m).
         h: water depth (m), shape [n_cells].
         u, v: depth-averaged velocities (m/s), shape [n_cells].
         manning_n: Manning's n (s/m^(1/3)), shape [n_cells].
@@ -77,7 +86,23 @@ def eddy_viscosity(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
     h_floor = jnp.maximum(h, m.h_small)
     u_star = jnp.sqrt(m.g) * manning_n * speed / (m.k_n * h_floor ** (1.0 / 6.0))
     C_t = theta.get("eddy_Ct", turbulence.coefficient)
-    return C_t * u_star * h + turbulence.nu0
+    nu_t = C_t * u_star * h + turbulence.nu0
+    if turbulence.mode != "mixing_length":
+        return nu_t
+
+    # Mixing-length part (C_m h)^2 |S|, with the strain-rate magnitude |S| (1/s) from the
+    # cell gradients of u and v; smoothed so that its derivative is finite at |S| = 0.
+    grad_u = green_gauss(m, u)
+    grad_v = green_gauss(m, v)
+    strain_squared = (
+        2.0 * grad_u[:, 0] ** 2
+        + 2.0 * grad_v[:, 1] ** 2
+        + (grad_u[:, 1] + grad_v[:, 0]) ** 2
+    )
+    strain = jnp.sqrt(strain_squared + 1.0e-12)
+    C_m = theta.get("eddy_Cm", turbulence.mixing_coefficient)
+    mixing_length = C_m * h
+    return nu_t + mixing_length**2 * strain
 
 
 def turbulent_diffusion(m: SWEModel, theta: Theta, h: Array, u: Array, v: Array,
