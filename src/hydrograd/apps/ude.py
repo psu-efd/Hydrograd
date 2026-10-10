@@ -14,7 +14,8 @@ normalized with the bounds of ``UDE_NN_config`` (see :mod:`hydrograd.apps.setup`
 Training
 --------
 Loss: ``[b_WSE] L_WSE + [b_uv] L_uv`` of the final frame (no bound/slope terms; see
-:mod:`hydrograd.apps.losses`); a failed solve gives L = inf. Gradients are forward mode
+:mod:`hydrograd.apps.losses`), plus the optional force (``"force_data"``) and scattered
+velocity (``"velocity_data"``) misfits; a failed solve gives L = inf. Gradients are forward mode
 for ``AutoForwardDiff()`` (Julia default for these small networks) and reverse mode with
 checkpointing otherwise.
 
@@ -57,6 +58,7 @@ from hydrograd.apps.losses import data_losses, load_truth
 from hydrograd.apps.optimize import run_stages, stages_from_options
 from hydrograd.apps.sensitivity import DERIV_RTOL
 from hydrograd.apps.setup import Case
+from hydrograd.apps.velocity_data import load_velocity_data, velocity_loss
 from hydrograd.closures.mlp import init_mlp
 from hydrograd.io.output import write_csv, write_json
 from hydrograd.solvers.final import final_state, reverse_only
@@ -193,6 +195,9 @@ def run_ude(case: Case) -> dict[str, Any]:
 
     # Extension: observed vegetation forces ("force_data" block), or None.
     force_data = load_force_data(case)
+
+    # Extension: scattered velocities, e.g. LSPIV ("velocity_data" block), or None.
+    velocity_data = load_velocity_data(case)
     logger.info("UDE training with %s-mode gradients", "forward" if fwd else "reverse")
 
     # ------------------------------------------------------------------
@@ -225,8 +230,8 @@ def run_ude(case: Case) -> dict[str, Any]:
 
         Returns:
             ``(total, aux)``: the scalar loss (dimensionless; inf if the solve failed) and
-            a dict with the terms ``"wse"``, ``"uv"`` and the final state ``"U"``
-            [3, n_cells].
+            a dict with the terms ``"wse"``, ``"uv"``, ``"force"``, ``"velocity"`` and the
+            final state ``"U"`` [3, n_cells].
         """
         U, ok = final_state(m, {"nn": th}, case.U0, s)
         dl = data_losses(m, U, truth)
@@ -234,10 +239,13 @@ def run_ude(case: Case) -> dict[str, Any]:
         # Optional force misfit (extension; e.g. sub-patch forces for a C_D closure).
         lf = force_loss(m, {"nn": th}, U, force_data) if force_data else 0.0
 
-        total = b_wse * dl["wse"] + b_uv * dl["uv"] + lf
+        # Optional misfit of scattered (LSPIV) velocities (extension).
+        lv = velocity_loss(m, {"nn": th}, U, velocity_data) if velocity_data else 0.0
+
+        total = b_wse * dl["wse"] + b_uv * dl["uv"] + lf + lv
         total = jnp.where(ok, total, jnp.inf)
 
-        return total, {"wse": dl["wse"], "uv": dl["uv"], "force": lf, "U": U}
+        return total, {"wse": dl["wse"], "uv": dl["uv"], "force": lf, "velocity": lv, "U": U}
 
     # ------------------------------------------------------------------
     # 4. Recording callback (loss history every iteration, fields every save_every)

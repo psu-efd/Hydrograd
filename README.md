@@ -72,6 +72,10 @@ hydrograd run            # dispatches on bPerform_Forward_Simulation / _Inversio
 - **Force data:** a `force_data` block (`file`, `sigma_N`, `weight`) adds observed drag forces on regions (material zones, boxes or cell lists) to the inversion and UDE losses. Flow fields alone do not identify how resistance is split between neighbouring patches; patch or sub-patch forces do.
 - **Order of accuracy:** use second order (the default) for deep, slow vegetated flows. On a sloping bed, first-order hydrostatic reconstruction adds a numerical flux of about √(gh) S dx/2.
 
+**Porous drag (Darcy–Forchheimer):** an optional `porous` block adds (α + β|u|) u h per unit plan area, the porous-media option of SRH-2D and HEC-RAS. Give `alpha` (1/s) and `beta` (1/m) per material ID, or `porosity` and `d` (m), from which Ergun's equation gives them. `active_param_names: ["porous_alpha"]` or `["porous_beta"]` inverts them, and force data include this drag.
+
+**Scattered velocity data (LSPIV):** an optional `velocity_data` block reads scattered velocities from CSV or PIVlab ASCII files. It maps them to model coordinates, converts surface velocities to depth averages (`surface_factor`), averages them over the cells that contain them, and adds the misfit on those cells to the inversion and UDE losses. See `docs/manual.md`, Sect. 7.1.
+
 **UDE network:** `UDE_NN_config.layernorm` defaults to false. The closure is a local law n_i = f(h_i). `layernorm_axes: "all"` reproduces Julia's non-local LayerNorm.
 
 ## Python API (sketch)

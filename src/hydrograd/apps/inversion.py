@@ -1,14 +1,18 @@
-"""Parameter inversion (port of ``swe_2D_inversion.jl``): Manning's n, zb or Q.
+"""Parameter inversion (port of ``swe_2D_inversion.jl``): Manning's n, zb, Q and extensions.
 
 Problem
 -------
-Find the active parameters p (Manning's n per zone, s/m^(1/3); zb per cell, m; or Q per
-inlet, m^3/s) that minimize
+Find the active parameters p (Manning's n per zone, s/m^(1/3); zb per cell, m; Q per
+inlet, m^3/s; or, as extensions, the stem drag coefficient or the Darcy-Forchheimer
+coefficients per zone, see :mod:`hydrograd.apps.params`) that minimize
 
-    L(p) = [b_WSE] L_WSE + [b_uv] L_uv + [b_bound] L_bound + [b_slope] L_slope,
+    L(p) = [b_WSE] L_WSE + [b_uv] L_uv + [b_bound] L_bound + [b_slope] L_slope
+           + L_force + L_vel,
 
 where the switches [b] come from ``inversion_bInversion_*_loss`` and the terms are those
-of :mod:`hydrograd.apps.losses`, evaluated on the final state U(t_end; p). A failed
+of :mod:`hydrograd.apps.losses`, evaluated on the final state U(t_end; p). The optional
+L_force (observed drag forces, :mod:`hydrograd.apps.force_data`) and L_vel (scattered
+velocities such as LSPIV, :mod:`hydrograd.apps.velocity_data`) are extensions. A failed
 solve gives L = inf.
 
 Gradients
@@ -51,6 +55,7 @@ from hydrograd.apps.optimize import run_stages, stages_from_options
 from hydrograd.apps.params import initial_params, to_theta
 from hydrograd.apps.sensitivity import DERIV_RTOL
 from hydrograd.apps.setup import Case
+from hydrograd.apps.velocity_data import load_velocity_data, velocity_loss
 from hydrograd.io.output import write_csv, write_json
 from hydrograd.solvers.final import final_state, reverse_only
 
@@ -127,6 +132,9 @@ def run_inversion(case: Case) -> dict[str, Any]:
     # Extension: observed vegetation forces ("force_data" block), or None.
     force_data = load_force_data(case)
 
+    # Extension: scattered velocities, e.g. LSPIV ("velocity_data" block), or None.
+    velocity_data = load_velocity_data(case)
+
     # Steady / implicit IFT gradients are reverse mode only.
     ode_o = o("inversion_ode_solver_options")
     fwd = (
@@ -166,7 +174,8 @@ def run_inversion(case: Case) -> dict[str, Any]:
         Returns:
             ``(total, aux)``: the scalar loss (dimensionless; inf if the solve failed) and
             a dict with the terms ``"wse"``, ``"uv"``, ``"bound"``, ``"slope"``,
-            ``"force"`` (0 without force data) and the final state ``"U"`` [3, n_cells].
+            ``"force"`` (0 without force data), ``"velocity"`` (0 without velocity data)
+            and the final state ``"U"`` [3, n_cells].
         """
         U, ok = final_state(m, to_theta(name, p), case.U0, s)
 
@@ -181,10 +190,17 @@ def run_inversion(case: Case) -> dict[str, Any]:
         # Optional force misfit (extension).
         lf = force_loss(m, to_theta(name, p), U, force_data) if force_data else 0.0
 
-        total = w.wse * dl["wse"] + w.uv * dl["uv"] + lb + ls + lf
+        # Optional misfit of scattered (LSPIV) velocities (extension).
+        if velocity_data:
+            lv = velocity_loss(m, to_theta(name, p), U, velocity_data)
+        else:
+            lv = 0.0
+
+        total = w.wse * dl["wse"] + w.uv * dl["uv"] + lb + ls + lf + lv
         total = jnp.where(ok, total, jnp.inf)
 
-        aux = {"wse": dl["wse"], "uv": dl["uv"], "bound": lb, "slope": ls, "force": lf, "U": U}
+        aux = {"wse": dl["wse"], "uv": dl["uv"], "bound": lb, "slope": ls, "force": lf,
+               "velocity": lv, "U": U}
         return total, aux
 
     # ------------------------------------------------------------------

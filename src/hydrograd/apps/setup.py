@@ -13,7 +13,8 @@ Pipeline
    w_still (m), and unit discharges q_x, q_y (m^2/s), as in ``process_ICs_2D.jl``.
 5. Flow-resistance model: constant Manning's n per material zone, an n(h, |U|, ks) law,
    or a neural-network closure (UDE mode).
-6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`), side-wall
+6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`),
+   Darcy-Forchheimer drag of porous zones (``"porous"`` block, see :func:`_porous`), side-wall
    friction (``"wall_friction"`` block, see :func:`_wall_friction`) and
    horizontal eddy viscosity (``"turbulence"`` block, see :func:`_turbulence`).
 7. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
@@ -55,6 +56,7 @@ from hydrograd.mesh import Mesh, build_mesh
 from hydrograd.params.manning import ManningLaw
 from hydrograd.physics.model import (
     Dispersion,
+    Porous,
     Resistance,
     SWEModel,
     Turbulence,
@@ -62,6 +64,7 @@ from hydrograd.physics.model import (
     WallFriction,
     build_model,
 )
+from hydrograd.physics.porous import WATER_VISCOSITY, ergun_coefficients
 from hydrograd.solvers.ode import ODESettings
 
 logger = logging.getLogger(__name__)
@@ -367,7 +370,7 @@ def _per_material(values: Any, n_materials: int, default: float, name: str) -> t
     # A list gives the value of every material in ID order.
     if isinstance(values, list):
         if len(values) != n_materials:
-            raise ValueError(f"vegetation.{name}: expected {n_materials} values, got {len(values)}")
+            raise ValueError(f"{name}: expected {n_materials} values, got {len(values)}")
         return tuple(float(v) for v in values)
 
     # A dict gives values for some material IDs.
@@ -375,7 +378,7 @@ def _per_material(values: Any, n_materials: int, default: float, name: str) -> t
     for key, value in values.items():
         material = int(key)
         if not 0 <= material < n_materials:
-            raise ValueError(f"vegetation.{name}: no material ID {material}")
+            raise ValueError(f"{name}: no material ID {material}")
         expanded[material] = float(value)
     return tuple(expanded)
 
@@ -413,13 +416,13 @@ def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
 
     # Frontal area per unit volume a (1/m): given directly, or from d and the spacing.
     if "a" in block:
-        a_zone = _per_material(block["a"], n_materials, 0.0, "a")
+        a_zone = _per_material(block["a"], n_materials, 0.0, "vegetation.a")
     else:
-        diameters = _per_material(block["d"], n_materials, 0.0, "d")
-        spacings = _per_material(block["spacing"], n_materials, 1.0, "spacing")
+        diameters = _per_material(block["d"], n_materials, 0.0, "vegetation.d")
+        spacings = _per_material(block["spacing"], n_materials, 1.0, "vegetation.spacing")
         a_zone = tuple(d / s ** 2 for d, s in zip(diameters, spacings, strict=True))
 
-    CD_zone = _per_material(block.get("CD", 1.0), n_materials, 1.0, "CD")
+    CD_zone = _per_material(block.get("CD", 1.0), n_materials, 1.0, "vegetation.CD")
 
     # Constant C_D per zone (forward, sensitivity, inversion of veg_CD).
     if not is_cd_network:
@@ -443,6 +446,69 @@ def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
         umag_bounds=bounds("Umag_bounds", (0.0, 1.0)),
         a_bounds=bounds("a_bounds", (0.0, max(a_zone) if a_zone else 1.0)),
     )
+
+
+def _porous(ctrl: Control, n_materials: int) -> Porous:
+    """Darcy-Forchheimer settings from the optional ``"porous"`` block of the run control.
+
+    Examples (material 3 is a porous zone)::
+
+        "porous": {"alpha": {"3": 0.02}, "beta": {"3": 4.0}}
+        "porous": {"porosity": {"3": 0.9}, "d": {"3": 0.01}, "viscosity": 1e-6}
+
+    ``alpha`` (1/s) and ``beta`` (1/length) are the coefficients of the drag
+    (alpha + beta |u|) u h per unit plan area (``physics.porous``). Alternatively the
+    porosity epsilon (-) and the grain or stem diameter ``d`` (length) give them through
+    Ergun's equation; the kinematic viscosity ``viscosity`` (length^2/s) defaults to
+    1e-6 m^2/s. Explicit ``alpha`` or ``beta`` entries override the Ergun values of the
+    listed materials. Materials not listed get no porous drag.
+
+    Args:
+        ctrl: run control.
+        n_materials: number of material IDs.
+
+    Returns:
+        The porous-zone settings (mode ``none`` if the block is absent).
+    """
+    block = ctrl.raw.get("porous")
+    if not block:
+        return Porous()
+
+    # Start from zero drag in every material.
+    alpha_zone = [0.0] * n_materials
+    beta_zone = [0.0] * n_materials
+
+    # Ergun coefficients for the materials with a porosity (porosity 1 = no drag).
+    if "porosity" in block:
+        porosities = _per_material(block["porosity"], n_materials, 1.0, "porous.porosity")
+        diameters = _per_material(block.get("d", 1.0), n_materials, 1.0, "porous.d")
+        viscosity = float(block.get("viscosity", WATER_VISCOSITY))
+        for material in range(n_materials):
+            if porosities[material] < 1.0:
+                alpha, beta = ergun_coefficients(
+                    porosities[material], diameters[material], viscosity
+                )
+                alpha_zone[material] = alpha
+                beta_zone[material] = beta
+
+    # Explicit coefficients replace the Ergun values of the materials they list.
+    for key, zone in (("alpha", alpha_zone), ("beta", beta_zone)):
+        if key not in block:
+            continue
+        given = _per_material(block[key], n_materials, float("nan"), f"porous.{key}")
+        for material, value in enumerate(given):
+            if not np.isnan(value):
+                zone[material] = value
+
+    if min(alpha_zone) < 0.0 or min(beta_zone) < 0.0:
+        raise ValueError("porous: alpha and beta must be non-negative")
+
+    logger.info(
+        "porous zones: alpha %s 1/s, beta %s 1/m",
+        np.array2string(np.asarray(alpha_zone), precision=4),
+        np.array2string(np.asarray(beta_zone), precision=4),
+    )
+    return Porous(mode="zone", alpha_zone=tuple(alpha_zone), beta_zone=tuple(beta_zone))
 
 
 def _turbulence(ctrl: Control) -> Turbulence:
@@ -555,7 +621,7 @@ def _dispersion(ctrl: Control, n_materials: int) -> Dispersion:
     model = block.get("model", "zone")
     if model != "zone":
         raise ValueError(f"dispersion.model must be 'zone', got {model!r}")
-    beta_zone = _per_material(block.get("beta", 1.0), n_materials, 1.0, "beta")
+    beta_zone = _per_material(block.get("beta", 1.0), n_materials, 1.0, "dispersion.beta")
     return Dispersion(mode="zone", beta_zone=beta_zone)
 
 
@@ -629,6 +695,11 @@ def setup_case(ctrl: Control) -> Case:
     if vegetation.mode != "none":
         model = dataclasses.replace(model, vegetation=vegetation)
 
+    # Extension: optional Darcy-Forchheimer drag of porous zones ("porous" block).
+    porous = _porous(ctrl, srh.mat.n_materials)
+    if porous.mode != "none":
+        model = dataclasses.replace(model, porous=porous)
+
     # Extension: optional horizontal eddy viscosity ("turbulence" block).
     turbulence = _turbulence(ctrl)
     if turbulence.mode != "none":
@@ -682,8 +753,9 @@ def setup_case(ctrl: Control) -> Case:
         ode = dataclasses.replace(ode, checkpoints=checkpoints, checkpoint_memory_gb=memory_gb)
 
     logger.info(
-        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, vegetation=%s, solver=%s",
+        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, vegetation=%s, porous=%s, "
+        "solver=%s",
         mesh.n_cells, mesh.n_faces, mesh.bc_types, resistance.mode, model.vegetation.mode,
-        ode.solver,
+        model.porous.mode, ode.solver,
     )
     return Case(ctrl, srh, mesh, model, U0, ode, wse, wstill, unit)

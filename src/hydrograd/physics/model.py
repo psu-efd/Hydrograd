@@ -45,7 +45,8 @@ from hydrograd.params.manning import ManningLaw
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "UNITS", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model", "n_state"
+    "UNITS", "Porous", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model",
+    "n_state",
 ]
 
 # GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
@@ -132,6 +133,30 @@ class Vegetation:
     feature: tuple[float, ...] = ()
     feature_bounds: tuple[float, float] = (0.0, 1.0)
     a_ref: float = 1.0
+
+
+@dataclass(frozen=True)
+class Porous:
+    """Darcy-Forchheimer drag of a porous zone, as a momentum sink per unit plan area.
+
+    The drag force per unit plan area divided by the water density is
+
+        F / rho = (alpha + beta |u|) u h     (m^2/s^2),
+
+    with u the depth-averaged (superficial) velocity (m/s) and h the depth (m). With
+    q = h u it equals c_df q, where c_df = alpha + beta |u| (1/s); this rate is added to
+    the bed-friction rate (see ``physics.porous``).
+
+    Attributes:
+        mode: ``none`` (no porous drag, default) or ``zone`` (coefficients per material).
+        alpha_zone: linear (Darcy) coefficient alpha for each material ID (1/s); 0 outside
+            porous zones.
+        beta_zone: quadratic (Forchheimer) coefficient beta for each material ID (1/m).
+    """
+
+    mode: str = "none"
+    alpha_zone: tuple[float, ...] = ()
+    beta_zone: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -332,6 +357,7 @@ class SWEModel:
     Q_times: Array | None = None       # time grid (s) when Q is a time series
     WSE_times: Array | None = None     # time grid (s) when WSE is a time series
     vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
+    porous: Porous = field(default_factory=Porous)  # Darcy-Forchheimer drag; none by default
     turbulence: Turbulence = field(default_factory=Turbulence)  # eddy viscosity; none by default
     wall_friction: WallFriction = field(default_factory=WallFriction)  # free-slip by default
     dispersion: Dispersion = field(default_factory=Dispersion)  # beta = 1 by default

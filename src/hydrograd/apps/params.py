@@ -8,7 +8,10 @@ supports exactly one active parameter group:
 * ``zb``       -> ``theta["zb"]``, one value per cell (m);
 * ``Q``        -> ``theta["Q"]``, one value per inlet-Q boundary (m^3/s);
 * ``veg_CD``   -> ``theta["veg_CD"]``, the stem drag coefficient per material ID (-)
-  (extension; needs a ``"vegetation"`` block in the run control).
+  (extension; needs a ``"vegetation"`` block in the run control);
+* ``porous_alpha`` -> ``theta["df_alpha"]``, the Darcy coefficient per material ID (1/s),
+  and ``porous_beta`` -> ``theta["df_beta"]``, the Forchheimer coefficient per material
+  ID (1/m) (extension; need a ``"porous"`` block in the run control).
 
 The initial (inversion) or evaluation (sensitivity) values come either from the run
 control or from a JSON file with the keys of ``_JSON_KEY`` (the format Hydrograd.jl
@@ -32,7 +35,14 @@ logger = logging.getLogger(__name__)
 __all__ = ["THETA_KEY", "active_name", "initial_params", "to_theta"]
 
 # Active parameter name (run control) -> key in the parameter dict theta.
-THETA_KEY = {"ManningN": "n_zone", "zb": "zb", "Q": "Q", "veg_CD": "veg_CD"}
+THETA_KEY = {
+    "ManningN": "n_zone",
+    "zb": "zb",
+    "Q": "Q",
+    "veg_CD": "veg_CD",
+    "porous_alpha": "df_alpha",
+    "porous_beta": "df_beta",
+}
 
 # Active parameter name -> key in a parameter JSON file ("from_file" option).
 _JSON_KEY = {
@@ -40,6 +50,8 @@ _JSON_KEY = {
     "zb": "zb_cells_param",
     "Q": "inlet_discharges_param",
     "veg_CD": "veg_CD_list_param",
+    "porous_alpha": "porous_alpha_list_param",
+    "porous_beta": "porous_beta_list_param",
 }
 
 
@@ -50,7 +62,8 @@ def active_name(case: Case) -> str:
         case: the case (its run control lists ``active_param_names``).
 
     Returns:
-        ``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``.
+        ``"ManningN"``, ``"zb"``, ``"Q"``, ``"veg_CD"``, ``"porous_alpha"`` or
+        ``"porous_beta"``.
     """
     names = case.ctrl.opt("active_param_names")
     if len(names) != 1 or names[0] not in THETA_KEY:
@@ -64,7 +77,7 @@ def _expected_len(case: Case, name: str) -> int:
 
     Args:
         case: the case.
-        name: active parameter name (``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``).
+        name: active parameter name (a key of ``THETA_KEY``).
 
     Returns:
         Number of material zones, cells, inlet-Q boundaries or material zones.
@@ -72,9 +85,12 @@ def _expected_len(case: Case, name: str) -> int:
     m = case.model
     if name == "veg_CD" and m.vegetation.mode != "zone":
         raise ValueError("active parameter veg_CD needs a 'vegetation' block in the run control")
+    if name.startswith("porous_") and m.porous.mode == "none":
+        raise ValueError(f"active parameter {name} needs a 'porous' block in the run control")
 
     lengths = {"ManningN": len(m.n_zone), "zb": m.n_cells, "Q": m.n_inlets,
-               "veg_CD": len(m.n_zone)}
+               "veg_CD": len(m.n_zone), "porous_alpha": len(m.n_zone),
+               "porous_beta": len(m.n_zone)}
     return lengths[name]
 
 
@@ -115,6 +131,8 @@ def initial_params(case: Case, prefix: str) -> tuple[str, Array]:
             "zb": f"{prefix}_zb_{suffix}",
             "Q": f"{prefix}_inlet_discharge_{suffix}",
             "veg_CD": f"{prefix}_veg_CD_{suffix}",
+            "porous_alpha": f"{prefix}_porous_alpha_{suffix}",
+            "porous_beta": f"{prefix}_porous_beta_{suffix}",
         }
         p = np.asarray(o(value_keys[name]), dtype=float)
 
@@ -138,7 +156,7 @@ def to_theta(name: str, p: Array) -> dict[str, Any]:
     """Parameter vector -> theta dict for the residual.
 
     Args:
-        name: active parameter name (``"ManningN"``, ``"zb"``, ``"Q"`` or ``"veg_CD"``).
+        name: active parameter name (a key of ``THETA_KEY``).
         p: parameter values, shape [n_params].
 
     Returns:

@@ -35,7 +35,9 @@ Loss term
 ---------
     L_force = weight * mean over observed components [ ((F_pred - F_obs) / sigma)^2 ]
 
-with F_pred the differentiable vegetation force of ``physics.vegetation.vegetation_force``.
+with F_pred the differentiable drag force of the vegetation
+(``physics.vegetation.vegetation_force``) plus that of the porous zones
+(``physics.porous.porous_force``), whichever the model has.
 """
 
 from __future__ import annotations
@@ -51,11 +53,12 @@ from jax import Array
 
 from hydrograd.apps.setup import Case
 from hydrograd.physics.model import SWEModel
+from hydrograd.physics.porous import porous_force
 from hydrograd.physics.vegetation import vegetation_force
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ForceData", "force_loss", "load_force_data"]
+__all__ = ["ForceData", "drag_force", "force_loss", "load_force_data"]
 
 
 @dataclass(frozen=True)
@@ -124,8 +127,8 @@ def load_force_data(case: Case) -> ForceData | None:
     block = case.ctrl.raw.get("force_data")
     if not block:
         return None
-    if case.model.vegetation.mode == "none":
-        raise ValueError("force_data needs vegetation in the model (a 'vegetation' block)")
+    if case.model.vegetation.mode == "none" and case.model.porous.mode == "none":
+        raise ValueError("force_data needs a 'vegetation' or a 'porous' block in the run control")
 
     spec = json.loads((case.ctrl.case_dir / block["file"]).read_text())
     regions = spec["regions"]
@@ -154,11 +157,39 @@ def load_force_data(case: Case) -> ForceData | None:
     return data
 
 
+def drag_force(
+    m: SWEModel, theta: dict[str, Any], U: Array, region_weights: Array, rho: float,
+) -> Array:
+    """Drag force of the vegetation and the porous zones on regions of cells.
+
+    Args:
+        m: the model (with vegetation, porous zones, or both).
+        theta: differentiable parameters.
+        U: state [xi, q_x, q_y], shape [3, n_cells].
+        region_weights: cell weights of every region, shape [n_regions, n_cells].
+        rho: water density (kg/m^3).
+
+    Returns:
+        Force (N) on each region, x and y components, shape [n_regions, 2].
+    """
+    force = jnp.zeros((region_weights.shape[0], 2))
+
+    # Stem drag (vegetation block).
+    if m.vegetation.mode != "none":
+        force = force + vegetation_force(m, theta, U, region_weights, rho)
+
+    # Darcy-Forchheimer drag (porous block).
+    if m.porous.mode != "none":
+        force = force + porous_force(m, theta, U, region_weights, rho)
+
+    return force
+
+
 def force_loss(m: SWEModel, theta: dict[str, Any], U: Array, data: ForceData) -> Array:
     """Weighted force misfit (dimensionless).
 
     Args:
-        m: the model (with vegetation).
+        m: the model (with vegetation, porous zones, or both).
         theta: differentiable parameters.
         U: final state [xi, q_x, q_y], shape [3, n_cells].
         data: the force observations.
@@ -166,6 +197,6 @@ def force_loss(m: SWEModel, theta: dict[str, Any], U: Array, data: ForceData) ->
     Returns:
         weight * mean of ((F_pred - F_obs) / sigma)^2 over the observed components.
     """
-    predicted = vegetation_force(m, theta, U, data.weights, data.rho)
+    predicted = drag_force(m, theta, U, data.weights, data.rho)
     squared = data.mask * ((predicted - data.observed) / data.sigma) ** 2
     return data.factor * jnp.sum(squared) / jnp.sum(data.mask)

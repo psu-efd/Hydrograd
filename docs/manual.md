@@ -94,7 +94,7 @@ The file has the same layout and keys as in Hydrograd.jl:
 
   Copy a Hydrograd.jl example and edit it.
 
-Hydrograd v1.0 adds optional **top-level blocks**: `numerics`, `turbulence`, `wall_friction`, `vegetation`, `dispersion` and `force_data` (Sects. 5–7). It also adds **solver names**: `SSPRK3()`, `SteadyNewton()`, `BackwardEuler()`, `CrankNicolson()`. A file without these entries runs with the defaults.
+Hydrograd v1.0 adds optional **top-level blocks**: `numerics`, `turbulence`, `wall_friction`, `vegetation`, `porous`, `dispersion`, `force_data` and `velocity_data` (Sects. 5–7). It also adds **solver names**: `SSPRK3()`, `SteadyNewton()`, `BackwardEuler()`, `CrankNicolson()`. A file without these entries runs with the defaults.
 
 ## 5. Numerical options
 
@@ -177,7 +177,20 @@ Rigid emergent stems exert the drag ½ C_D a h |u| u per unit plan area.
 - `a` is the frontal area per unit volume (1/m) per material ID. Alternatively give `d` (stem diameter, m) and `spacing` (m) per material, from which a = d/spacing².
 - C_D is applied to the 2D cell velocity, so it must be defined with the velocity averaged over the vegetated area, not the approach velocity of an isolated stem.
 
-### 6.5 Dispersive momentum flux (`dispersion` block)
+### 6.5 Porous drag, Darcy–Forchheimer (`porous` block)
+
+```json
+"porous": {"alpha": {"3": 0.02}, "beta": {"3": 4.0}}
+"porous": {"porosity": {"3": 0.9}, "d": {"3": 0.01}, "viscosity": 1e-6}
+```
+
+A porous zone (dense vegetation treated as a porous medium, a log jam, a rock or brush structure) exerts the drag (α + β|u|) u h per unit plan area, where u is the depth-averaged (superficial) velocity.
+- `alpha` (1/s) is the linear (Darcy) coefficient and `beta` (1/m) the quadratic (Forchheimer) coefficient, per material ID.
+- Alternatively, give the porosity ε and the grain or stem diameter `d` (m); Ergun's equation then gives α = 150 ν (1−ε)²/(ε³ d²) and β = 1.75 (1−ε)/(ε³ d). Explicit `alpha` or `beta` entries override the Ergun values of the materials they list.
+- Materials that are not listed have no porous drag. The block can be combined with `vegetation`; the two drags add.
+- Both coefficients are differentiable (`df_alpha`, `df_beta`) and can be inverted (Sect. 7.1).
+
+### 6.6 Dispersive momentum flux (`dispersion` block)
 
 ```json
 "dispersion": {"model": "zone", "beta": {"2": 1.3}}
@@ -193,7 +206,8 @@ In `inversion_options`, `active_param_names` selects the parameters:
 - `ManningN`: n per zone;
 - `zb`: bed elevation per cell;
 - `Q`: inlet discharge;
-- `veg_CD`: drag coefficient per zone.
+- `veg_CD`: drag coefficient per zone;
+- `porous_alpha`, `porous_beta`: Darcy–Forchheimer coefficients per zone.
 
 The loss combines normalised misfits of the water-surface elevation (WSE) and the velocities against the truth file, plus a bound penalty. Optional force data are added with the `force_data` block:
 
@@ -201,7 +215,26 @@ The loss combines normalised misfits of the water-surface elevation (WSE) and th
 "force_data": {"file": "forces.json", "sigma_N": 0.05, "weight": 1.0}
 ```
 
-It gives observed drag forces on regions: material zones, boxes or cell lists.
+It gives observed drag forces on regions: material zones, boxes or cell lists. The predicted force is the drag of the vegetation and the porous zones in the region.
+
+Scattered velocities, such as LSPIV or PIV surface velocities, ADV points or CFD probes, are added with the `velocity_data` block:
+
+```json
+"velocity_data": {
+    "file": "lspiv.csv",
+    "transform": {"origin": [0.0, 0.0], "rotation_deg": 0.0, "scale": 1.0,
+                  "velocity_scale": 1.0, "flip_y": false},
+    "surface_factor": 0.85, "sigma_point": 0.02, "sigma_floor": 0.005,
+    "min_points": 1, "components": ["u", "v"], "weight": 1.0,
+    "binned_file": "lspiv_cells.csv"
+}
+```
+
+- **File:** a text file with columns `x`, `y`, `u`, `v`, separated by commas, semicolons, tabs or spaces. Units in brackets are ignored, so the ASCII export of PIVlab is read directly. Other column names can be mapped with `"columns": {"u": "vx", "v": "vy"}`, and rows with NaN velocities (masked vectors) are dropped.
+- **Coordinates:** `transform` maps the measurement frame to the model frame. `flip_y` handles image rows that point down, then the axes are rotated by `rotation_deg`, scaled by `scale` (e.g. m per pixel) and shifted by `origin`. Velocities are rotated in the same way and multiplied by `velocity_scale`.
+- **Depth averaging:** surface velocities are converted to depth averages with the velocity index `surface_factor`. About 0.85 suits a logarithmic profile; use 1 for data that are already depth averages. It is best measured with a few velocity profiles in the same flow.
+- **Cells:** points are averaged over the mesh cells that contain them, and points outside the mesh are dropped. A cell with N points has the uncertainty √(σ_point²/N + σ_floor²), and cells with fewer than `min_points` points are not used. `binned_file` writes the cell observations as CSV, so the mapping can be checked.
+- **Loss:** the term is `weight` × the mean of ((U_pred − U_obs)/σ)² over the observed cells and components. It works in inversion and in UDE training.
 
 Optimisers are run in sequence: for example Adam, then L-BFGS (`inversion_optimizers`, `inversion_learning_rates`, `inversion_max_iterations`). Positive parameters are optimised in log form where appropriate.
 
