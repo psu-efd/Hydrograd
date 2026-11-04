@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use Hydrograd, please cite the software and the model description paper."
 title: "Hydrograd: a differentiable two-dimensional shallow-water model on unstructured meshes"
-version: 1.0.0
+version: 2.0.0
 license: MIT
 repository-code: "https://github.com/psu-efd/Hydrograd"
 authors:

@@ -1,4 +1,4 @@
-"""Figure 3 of the Hydrograd v1.0 paper: verification of the forward solver.
+"""Figure 3 of the Hydrograd v2.0 paper: verification of the forward solver.
 
 Usage (from any folder, with the Hydrograd venv active)::
 

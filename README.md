@@ -1,7 +1,8 @@
 # hydrograd (Python/JAX)
 
 Differentiable finite-volume solver for the 2D shallow water equations (SWEs) and Universal SWEs
-(SWEs with neural-network flow-resistance closures). It is a Python/JAX port and extension of
+(SWEs with neural-network flow-resistance closures). This is *Hydrograd* v2.0: it adds a Python/JAX
+implementation (CPU and GPU) to, and extends the capabilities of, the first version (v1.0),
 [Hydrograd.jl](https://github.com/psu-efd/Hydrograd.jl) (Liu & Song 2025, *Water Resources Research*,
 doi:10.1029/2025WR040265).
 
@@ -9,7 +10,7 @@ doi:10.1029/2025WR040265).
 - **Modes:** forward simulation, sensitivity analysis, inversion (Manning's n, bed elevation, inflow) and UDE training.
 - **Hardware:** CPU and GPU (JAX, float64).
 
-**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The examples of the model description paper (Liu, *Hydrograd v1.0*, Geoscientific Model Development, in preparation), with the scripts that reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff).
+**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The examples of the model description paper (Liu, *Hydrograd v2.0*, Geoscientific Model Development, in preparation), with the scripts that reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff).
 
 ## Install
 

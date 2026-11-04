@@ -1,4 +1,4 @@
-"""Cost and accuracy of the gradient methods of Hydrograd v1.0 (paper Table "gradient methods").
+"""Cost and accuracy of the gradient methods of Hydrograd v2.0 (paper Table "gradient methods").
 
 Usage:
     python paper/perf_gradient_methods.py OUT.jsonl steady NX NY T1 [T2 ...]

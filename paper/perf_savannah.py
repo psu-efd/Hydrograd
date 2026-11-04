@@ -1,4 +1,4 @@
-"""Savannah River UDE case: Hydrograd v1.0 timings for the comparison with Hydrograd.jl.
+"""Savannah River UDE case: Hydrograd v2.0 timings for the comparison with Hydrograd.jl.
 
 Usage:
     python paper/perf_savannah.py OUT.jsonl CASE_DIR [FORWARD_CASE_DIR]

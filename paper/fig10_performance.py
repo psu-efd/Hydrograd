@@ -1,4 +1,4 @@
-"""Figure 10 of the Hydrograd v1.0 paper: computational performance.
+"""Figure 10 of the Hydrograd v2.0 paper: computational performance.
 
 Usage:
     python paper/fig10_performance.py

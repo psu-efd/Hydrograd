@@ -1,4 +1,4 @@
-"""Figure 1: overview of Hydrograd v1.0 and its gradient methods (schematic).
+"""Figure 1: overview of Hydrograd v2.0 and its gradient methods (schematic).
 
 Left: inputs (SRH-2D unstructured mesh, materials, boundary conditions, run control) and
 the model parameters theta. Centre: the discrete residual R(U; theta) on the

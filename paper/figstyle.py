@@ -1,4 +1,4 @@
-"""Shared figure style for the Hydrograd v1.0 paper (Geoscientific Model Development).
+"""Shared figure style for the Hydrograd v2.0 paper (Geoscientific Model Development).
 
 Conventions (author's style, adapted to the GMD figure rules):
 

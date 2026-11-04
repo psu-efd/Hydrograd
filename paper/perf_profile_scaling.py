@@ -1,4 +1,4 @@
-"""Scaling profile of Hydrograd v1.0 on synthetic channels of growing size (paper Table/Fig. 10a).
+"""Scaling profile of Hydrograd v2.0 on synthetic channels of growing size (paper Table/Fig. 10a).
 
 Usage:
     python paper/perf_profile_scaling.py OUT.jsonl NX NY [NX NY ...] [--steady-max-cells N]

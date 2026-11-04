@@ -2,10 +2,10 @@
 
 Purpose
 -------
-Hydrograd v1.0 trains a neural-network (NN) Manning's-n closure n = NN(h) inside the 2D
+Hydrograd v2.0 trains a neural-network (NN) Manning's-n closure n = NN(h) inside the 2D
 shallow-water equations (SWEs), i.e. a universal differential equation (UDE). The WRR paper
 (Liu and Song, 2025) obtained the gradient of the loss by differentiating through explicit
-time marching to a near-steady state. Hydrograd v1.0 can instead solve the steady state
+time marching to a near-steady state. Hydrograd v2.0 can instead solve the steady state
 directly and differentiate it with the implicit function theorem (IFT). This script trains the
 same closure both ways on the 1D channel with a bump and compares cost and accuracy.
 

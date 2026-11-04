@@ -1,4 +1,4 @@
-"""Shared helpers of the performance scripts of the Hydrograd v1.0 paper (Sect. "Performance").
+"""Shared helpers of the performance scripts of the Hydrograd v2.0 paper (Sect. "Performance").
 
 The scripts ``perf_profile_scaling.py``, ``perf_checkpoints.py`` and
 ``perf_gradient_methods.py`` time jitted JAX functions and record the hardware and software

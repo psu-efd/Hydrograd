@@ -1,4 +1,4 @@
-"""Gradient verification for the Hydrograd v1.0 paper (table of AD vs finite differences).
+"""Gradient verification for the Hydrograd v2.0 paper (table of AD vs finite differences).
 
 Usage (with the Hydrograd venv active; about 10-20 min on 8 CPU cores)::
 

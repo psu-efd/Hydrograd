@@ -1,4 +1,4 @@
-"""Collect the performance data of the Hydrograd v1.0 paper into tables and one JSON file.
+"""Collect the performance data of the Hydrograd v2.0 paper into tables and one JSON file.
 
 Usage:
     python paper/perf_tables.py
@@ -10,7 +10,7 @@ Inputs (``paper/data/performance/``, written by the ``perf_*.py`` scripts on Roa
 - ``gradient_methods_cpu.jsonl``, ``gradient_methods_a100.jsonl``: steady IFT against
   backpropagation through pseudo-time, and explicit against implicit unsteady gradients;
 - ``savannah_python_{cpu,a100}.jsonl``, ``savannah_julia_cpu.json``: Savannah River,
-  Hydrograd v1.0 and Hydrograd.jl on the same node;
+  Hydrograd v2.0 and Hydrograd.jl on the same node;
 - ``checkpoints_a100.jsonl``, ``ensemble_a100.log``: used by the figure only.
 
 Outputs (``paper/results/``):
@@ -247,9 +247,9 @@ def short_cpu(model: str) -> str:
 
 
 def savannah_table(out: dict[str, Any]) -> str:
-    """Table "Hydrograd.jl vs Hydrograd v1.0" on the Savannah River case.
+    """Table "Hydrograd.jl vs Hydrograd v2.0" on the Savannah River case.
 
-    Rows: Hydrograd.jl on one thread of the CPU node; Hydrograd v1.0 on one core, on 8 cores
+    Rows: Hydrograd.jl on one thread of the CPU node; Hydrograd v2.0 on one core, on 8 cores
     of the same CPU type, and on an A100, each with forward- and reverse-mode gradients.
 
     Args:
@@ -278,7 +278,7 @@ def savannah_table(out: dict[str, Any]) -> str:
                      fmt(julia["grad_s"])])
         csv_rows.append(["Hydrograd.jl", hw, julia["fwd_s"], "forward", julia["grad_s"]])
 
-    # Hydrograd v1.0: forward- and reverse-mode gradients on 1 core, 8 cores and the A100.
+    # Hydrograd v2.0: forward- and reverse-mode gradients on 1 core, 8 cores and the A100.
     machines = ((py_cpu1, env_cpu1, "1 core"), (py_cpu, env_cpu, "cores"),
                 (py_gpu, env_gpu, "gpu"))
     for records, env, label in machines:
@@ -292,11 +292,11 @@ def savannah_table(out: dict[str, Any]) -> str:
         else:
             hw = f"{short_cpu(env['cpu_model'])}, {env['cores_available']} cores"
         forward = r.get("fwd_case_s", r["fwd_ctrl_s"])
-        rows.append(["Hydrograd v1.0", hw, fmt(forward), "forward (JVP)", fmt(r["grad_fwd_s"])])
-        rows.append(["Hydrograd v1.0", hw, fmt(forward), "reverse (checkpointed)",
+        rows.append(["Hydrograd v2.0", hw, fmt(forward), "forward (JVP)", fmt(r["grad_fwd_s"])])
+        rows.append(["Hydrograd v2.0", hw, fmt(forward), "reverse (checkpointed)",
                      fmt(r["grad_rev_s"])])
-        csv_rows.append(["Hydrograd v1.0", hw, forward, "forward", r["grad_fwd_s"]])
-        csv_rows.append(["Hydrograd v1.0", hw, forward, "reverse", r["grad_rev_s"]])
+        csv_rows.append(["Hydrograd v2.0", hw, forward, "forward", r["grad_fwd_s"]])
+        csv_rows.append(["Hydrograd v2.0", hw, forward, "reverse", r["grad_rev_s"]])
 
     with open(RESULTS / "table_savannah.csv", "w", newline="") as f:
         writer = csv.writer(f)
@@ -315,7 +315,7 @@ def main() -> None:
     tables = {
         "scaling": scaling_table(out),
         "gradient methods": gradient_methods_table(out),
-        "Hydrograd.jl vs Hydrograd v1.0 (Savannah River)": savannah_table(out),
+        "Hydrograd.jl vs Hydrograd v2.0 (Savannah River)": savannah_table(out),
     }
 
     # Figure-only data: checkpoint sweep and ensemble throughput.
@@ -334,7 +334,7 @@ def main() -> None:
         "v3_superseded": "benchmarks/package/results/*_v3.jsonl (2026-10-05) were measured with "
                          "the first-order scheme (7 Jacobian colours, 55 steps at 8k cells); "
                          "the current default is second order (19 colours, 104 steps), so "
-                         "v3 times are 4-9x lower and no longer represent v1.0.",
+                         "v3 times are 4-9x lower and no longer represent v2.0.",
         "ift_512k_gpu": "Newton + IFT gradient at 512k cells on the A100 (40 GB) ran out of "
                         "device memory (one 22 GiB allocation in the jitted steady loss); the "
                         "table shows '--'. Newton alone (97 s) fits; on the CPU node it runs.",
@@ -345,7 +345,7 @@ def main() -> None:
                             "1 Julia thread; forward time includes case setup and output; "
                             "gradient = (t(4 Adam iterations) - t(1 iteration)) / 3 (ForwardDiff "
                             "through the solve, plus the optimizer and callback). Hydrograd "
-                            "v1.0: second-order HLLC scheme, compiled times without setup, "
+                            "v2.0: second-order HLLC scheme, compiled times without setup, "
                             "gradients at rtol 1e-7 (DERIV_RTOL). WRR paper (Liu and Song, "
                             "2025): 18667 s / 150 epochs = 124 s per gradient on a Xeon Gold "
                             "5222 workstation.",

@@ -1,4 +1,4 @@
-"""Shared helpers for the Savannah River figures of the Hydrograd v1.0 paper (Figs. 2, 4, 5).
+"""Shared helpers for the Savannah River figures of the Hydrograd v2.0 paper (Figs. 2, 4, 5).
 
 The Savannah River case is the Hydrograd.jl example ``Savannah_River`` (SRH-2D mesh of
 1306 cells, five Manning roughness zones, one inlet-Q and one exit-H boundary). This module

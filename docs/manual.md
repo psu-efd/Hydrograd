@@ -1,4 +1,4 @@
-# Hydrograd v1.0 user manual
+# Hydrograd v2.0 user manual
 
 *Hydrograd* is a differentiable two-dimensional (2D) shallow-water model on unstructured meshes. It runs forward simulations and computes exact gradients of model outputs with respect to model parameters, for calibration (inversion), sensitivity analysis and the training of data-driven closures (universal shallow-water equations, USWEs). This manual explains how to install the model, set up and run a case, and choose the numerical options. The model, its numerics and its verification are described in the accompanying paper (Liu, *Geoscientific Model Development*, in preparation); the examples of the paper are in `paper/`.
 
@@ -94,7 +94,7 @@ The file has the same layout and keys as in Hydrograd.jl:
 
   Copy a Hydrograd.jl example and edit it.
 
-Hydrograd v1.0 adds optional **top-level blocks**: `numerics`, `turbulence`, `wall_friction`, `vegetation`, `porous`, `dispersion`, `force_data` and `velocity_data` (Sects. 5–7). It also adds **solver names**: `SSPRK3()`, `SteadyNewton()`, `BackwardEuler()`, `CrankNicolson()`. A file without these entries runs with the defaults.
+Hydrograd v2.0 adds optional **top-level blocks**: `numerics`, `turbulence`, `wall_friction`, `vegetation`, `porous`, `dispersion`, `force_data` and `velocity_data` (Sects. 5–7). It also adds **solver names**: `SSPRK3()`, `SteadyNewton()`, `BackwardEuler()`, `CrankNicolson()`. A file without these entries runs with the defaults.
 
 ## 5. Numerical options
 
