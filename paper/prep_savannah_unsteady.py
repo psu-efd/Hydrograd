@@ -37,13 +37,14 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "benchmarks" / "validation"))
 
-import hydrograd  # noqa: F401
 import savannah_unsteady_inversion as sav
+
+import hydrograd  # noqa: F401
 from hydrograd.apps.setup import setup_case
 from hydrograd.io.control import read_control
 
 OUT_DIR = REPO / "paper" / "data" / "savannah_unsteady"
-CASE_CONTROL = REPO / "temp" / "savannah_inversion" / "case" / "run_control.json"
+CASE_CONTROL = REPO / "paper" / "cases" / "savannah_river_unsteady" / "run_control.json"
 MODEL_FLOOR_DIR = REPO / "temp" / "modelfloor"
 
 # Calibration runs: label -> (Slurm log, summary JSON, hardware).

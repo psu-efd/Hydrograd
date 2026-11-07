@@ -52,11 +52,10 @@ from pathlib import Path
 
 import numpy as np
 
-# Paths: this folder (paper/), the repository root and the Julia examples.
+# Paths: this folder (paper/), the repository root and the case input files.
 PAPER_DIR = Path(__file__).resolve().parent
 REPO_DIR = PAPER_DIR.parent
-JULIA_DIR = Path(os.environ.get("HYDROGRAD_JL", REPO_DIR.parent / "Hydrograd.jl"))
-BUMP_EXAMPLE = JULIA_DIR / "examples/SWE_2D/forward_simulation/oneD_channel_with_bump"
+BUMP_EXAMPLE = PAPER_DIR / "cases" / "channel_bump_transcritical"
 DATA_FILE = PAPER_DIR / "data" / "fig03_verification.npz"
 RESULT_FILE = PAPER_DIR / "results" / "verification.json"
 
@@ -332,7 +331,7 @@ def run_lake_at_rest(order: int, work_dir: Path) -> tuple[dict, dict]:
 def run_bump(work_dir: Path, manning_n: float | None) -> tuple[dict, dict]:
     """Steady transcritical bump flow at orders 1 and 2 vs the analytical WSE.
 
-    The Julia example is copied into ``work_dir`` first (never run inside Hydrograd.jl).
+    The case is copied into ``work_dir`` first (never run inside ``paper/cases``).
     The analytical (SWASHES/FullSWOF) solution is frictionless, whereas the example uses
     Manning's n = 0.02 s/m^(1/3); ``manning_n = 1e-4`` (n = 0 gives NaN in the inlet-Q
     conveyance split L h^(5/3) / n) removes the friction so that
@@ -584,7 +583,15 @@ def plot() -> None:
     import matplotlib.pyplot as plt
 
     sys.path.insert(0, str(PAPER_DIR))
-    from figstyle import FULL_WIDTH, MODEL, MODEL_2, REFERENCE, apply_style, panel_label, save
+    from figstyle import (
+        FULL_WIDTH,
+        MODEL,
+        MODEL_2,
+        REFERENCE,
+        apply_style,
+        panel_label,
+        save,
+    )
 
     from hydrograd.validation.dambreak import dam_break
 

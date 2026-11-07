@@ -3,9 +3,8 @@
 The Savannah River case is the Hydrograd.jl example ``Savannah_River`` (SRH-2D mesh of
 1306 cells, five Manning roughness zones, one inlet-Q and one exit-H boundary). This module
 
-- locates the Hydrograd.jl examples (environment variable ``HYDROGRAD_JL``, or the checkout
-  next to this repository);
-- copies an example into a scratch folder (Hydrograd.jl itself is never written to) and
+- locates the case input files in ``paper/cases/``;
+- copies a case into a scratch folder (the case folder itself is never written to) and
   rewrites its ``run_control.json``;
 - draws scalar fields on the true unstructured polygon cells with a matplotlib
   ``PolyCollection``;
@@ -33,11 +32,12 @@ REPO = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO / "paper" / "data"
 RESULTS_DIR = REPO / "paper" / "results"
 
-# Hydrograd.jl checkout that holds the example cases (read only).
-JL = Path(os.environ.get("HYDROGRAD_JL", str(REPO.parent / "Hydrograd.jl")))
-EXAMPLES = JL / "examples" / "SWE_2D"
-FORWARD_CASE = EXAMPLES / "forward_simulation" / "Savannah_River"
-INVERSION_CASE = EXAMPLES / "inversion" / "ManningN_inversion" / "Savannah_River"
+# Input files of the Savannah River cases (paper/cases/, read only; copies of the
+# Hydrograd.jl examples forward_simulation/Savannah_River and
+# inversion/ManningN_inversion/Savannah_River).
+CASES_DIR = REPO / "paper" / "cases"
+FORWARD_CASE = CASES_DIR / "savannah_river_steady"
+INVERSION_CASE = CASES_DIR / "savannah_river_inversion"
 
 
 def read_json_with_commas(path: Path) -> dict[str, Any]:
