@@ -21,7 +21,7 @@ Diagnostics
   60 s, central differences.
 - Inundated area: sum of A_i over cells with h_i > 1 cm (m^2).
 
-Usage (A100 recommended; see ``hpc/roar/paper_prep.sbatch``)
+Usage (an A100 GPU is recommended; run as a batch job)
 -----
     python paper/prep_flood_wave.py [WORK_DIR]
 

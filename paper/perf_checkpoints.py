@@ -4,7 +4,7 @@ Usage:
     python paper/perf_checkpoints.py OUT.jsonl NX NY N_CHECKPOINTS
 
 Run one process per checkpoint count (the peak-memory counter cannot be reset inside a
-process); ``perf_gpu.sbatch`` loops over the counts.
+process); the GPU batch job loops over the counts.
 
 Case and run: as in ``perf_profile_scaling.py``, the default synthetic channel with NX x NY
 cells, a transient run of 20 s from rest (Tsit5, rtol 1e-6, atol 1e-9), and the gradient of

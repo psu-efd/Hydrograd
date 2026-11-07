@@ -44,7 +44,7 @@ Outputs
   n(h) (s/m^(1/3)), NN size, hardware, and the steady-state residual of the transient run.
 * ``paper/data/fig06_steady_ude/``: case copies, training outputs and ``curves.npz``.
 
-Usage (from the repository root, with ``hpc/roar/env.sh`` sourced and
+Usage (from the repository root, with the package environment active and
 ``JAX_PLATFORMS=cpu``)::
 
     python paper/fig06_steady_ude.py            # train if no saved data, then plot

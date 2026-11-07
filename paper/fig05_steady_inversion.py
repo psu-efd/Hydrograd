@@ -3,8 +3,8 @@
 Five Manning zones (true n* = 0.040, 0.050, 0.030, 0.045, 0.050 s m^(-1/3)) are recovered
 from synthetic WSE and velocity observations, starting from n = 0.03 everywhere, with Adam
 (30 iterations, learning rate 1e-3) followed by L-BFGS. The computations are in
-``fig05_compute.py`` (run them in a Slurm job for reproducible timings:
-``sbatch hpc/roar/paper_fig04_05.sbatch``).
+``fig05_compute.py`` (run them as a batch job on a quiet node for reproducible
+timings).
 
 Panels
 ------

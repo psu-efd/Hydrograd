@@ -32,3 +32,11 @@ plan/
 paper/fig01_overview.py
 paper/fig01_overview_svg.py
 paper/fig02_mesh_jacobian.py
+
+# Private working material (kept locally): assistant notes, VS Code workspace with the
+# proposal folders, cluster job scripts, environment and job logs
+CLAUDE.md
+Hydrograd_USWE.code-workspace
+hpc/
+paper/logs/
+*.sbatch

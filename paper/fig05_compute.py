@@ -36,7 +36,7 @@ Runs
 
 Each run writes ``paper/data/fig05_<run>.json``; ``fig05_steady_inversion.py`` plots them and
 writes ``paper/results/steady_inversion.json``. Wall times are measured on the machine that
-runs this script (recorded with each run; use ``hpc/roar/paper_fig04_05.sbatch``).
+runs this script (recorded with each run; run it as a batch job on a quiet node).
 
 Usage
 -----

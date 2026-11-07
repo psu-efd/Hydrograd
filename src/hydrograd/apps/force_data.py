@@ -1,8 +1,8 @@
 """Observed vegetation drag forces as calibration data (extension of inversion and UDE).
 
 Flow fields (water levels, velocities) constrain the total flow resistance well, but not
-how it is distributed among neighbouring vegetation patches, nor inside a patch (see
-``plan/cfd_pilot_report.md``). Measured forces on patches or sub-patches (force sensors,
+how it is distributed among neighbouring vegetation patches, nor inside a patch (as the
+3D CFD pilot study of tandem vegetation patches showed). Measured forces on patches or sub-patches (force sensors,
 or forces from 3D CFD) supply that information. This module adds them to the loss of the
 inversion and UDE modes.
 
