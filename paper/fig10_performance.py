@@ -3,12 +3,17 @@
 Usage:
     python paper/fig10_performance.py
 
-Panels (data in ``paper/data/performance/``, written by the ``perf_*.py`` scripts on Roar):
+The figure (single column) shows the wall time against the number of cells (log-log) on
+the synthetic channel: transient forward run (20 s simulated), reverse-mode gradient through
+that run, and steady pseudo-transient Newton solve, on one CPU node (16 cores) and on one
+A100 GPU. A line of slope 1 marks linear scaling. Data in ``paper/data/performance/``,
+written by the ``perf_*.py`` scripts on Roar.
 
-(a) Wall time against the number of cells (log-log) on the synthetic channel: transient
-    forward run (20 s simulated), reverse-mode gradient through that run, and steady
-    pseudo-transient Newton solve, on one CPU node (16 cores) and on one A100 GPU. A line of
-    slope 1 marks linear scaling.
+The three other panels of the earlier four-panel version (2026-10-09) are kept below as
+functions but are no longer drawn, after the performance section of the paper was
+shortened (2026-11-07): (b) checkpoint trade-off, (c) ensemble throughput, (d) steady
+gradients against backpropagation through pseudo-time. Their data files are unchanged.
+
 (b) Reverse-mode gradient through the 20 s run at 128,000 cells on the A100 against the
     number of checkpoints: cost relative to the forward run (left axis) and peak device
     memory (right axis). Fewer checkpoints trade memory for recomputation.
@@ -36,7 +41,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from figstyle import FULL_WIDTH, apply_style, panel_label, save
+from figstyle import COLUMN_WIDTH, apply_style, save
 
 DATA = HERE / "data" / "performance"
 
@@ -67,7 +72,7 @@ def read_records(name: str) -> list[dict[str, Any]]:
 
 
 def panel_scaling(ax: plt.Axes) -> None:
-    """Panel (a): wall time against cell count on the CPU node and the A100.
+    """Wall time against cell count on the CPU node and the A100 (the whole figure).
 
     Args:
         ax: the axes.
@@ -238,18 +243,11 @@ def panel_steady(ax: plt.Axes) -> None:
 
 
 def main() -> None:
-    """Draw the four panels and save the figure."""
+    """Draw the single-column scaling figure and save it."""
     apply_style()
-    fig, axes = plt.subplots(2, 2, figsize=(FULL_WIDTH, 0.78 * FULL_WIDTH))
-    panel_scaling(axes[0, 0])
-    panel_checkpoints(axes[0, 1])
-    panel_ensemble(axes[1, 0])
-    panel_steady(axes[1, 1])
-
-    # Panel labels and spacing.
-    for ax, label in zip(axes.ravel(), ("(a)", "(b)", "(c)", "(d)")):
-        panel_label(ax, label, x=-0.26)
-    fig.tight_layout(w_pad=2.5, h_pad=1.5)
+    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH, 0.9 * COLUMN_WIDTH))
+    panel_scaling(ax)
+    fig.tight_layout()
     print(save(fig, "fig10_performance"))
 
 
