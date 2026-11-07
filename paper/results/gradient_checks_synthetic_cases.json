@@ -1,0 +1,256 @@
+{
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Gold 6342 CPU @ 2.80GHz",
+    "usable_cores": 8,
+    "host": "p-sc-2176",
+    "slurm_job_id": "56200526",
+    "python": "3.12.15",
+    "jax": "0.11.2",
+    "jax_devices": [
+      "cpu:0"
+    ],
+    "precision": "float64"
+  },
+  "loss": "sum(w * U), w ~ N(0, 1), seed 0",
+  "rel_diff": "|AD - FD| / |FD| (central FD)",
+  "i_steady_ift_savannah": {
+    "case": "forward_simulation/Savannah_River",
+    "n_cells": 1306,
+    "order": 2,
+    "newton_dtau0_s": 2.0,
+    "newton_iterations": 7,
+    "newton_final_max_residual": 1.1479989103072183e-13,
+    "newton_solve_time_s": 1.3935562437400222,
+    "newton_first_call_incl_compile_s": 5.801465574651957,
+    "ift_gradient_time_s": 1.6111067654564977,
+    "ift_gradient_first_call_incl_compile_s": 6.706547642126679,
+    "fd_step": 1e-06,
+    "gradient_vs_fd": [
+      {
+        "index": [
+          1
+        ],
+        "ad": -184.7277420459378,
+        "fd": -184.72774095812383,
+        "rel_diff": 5.888741726631421e-09
+      },
+      {
+        "index": [
+          2
+        ],
+        "ad": 91.74275326721711,
+        "fd": 91.74275638201834,
+        "rel_diff": 3.395146771253713e-08
+      },
+      {
+        "index": [
+          3
+        ],
+        "ad": 320.6343199732958,
+        "fd": 320.63432327333885,
+        "rel_diff": 1.029223259635805e-08
+      },
+      {
+        "index": [
+          4
+        ],
+        "ad": 25.38051296019459,
+        "fd": 25.38051310807532,
+        "rel_diff": 5.8265461085874565e-09
+      },
+      {
+        "index": [
+          5
+        ],
+        "ad": -249.19227307291771,
+        "fd": -249.19227375619357,
+        "rel_diff": 2.7419624490275345e-09
+      }
+    ],
+    "max_rel_diff": 3.395146771253713e-08,
+    "transient_t_end_s": 3000.0,
+    "transient_rtol": 1e-08,
+    "transient_time_incl_compile_s": 28.13117740303278,
+    "transient_final_max_abs_dUdt": 1.4003062628843363e-07,
+    "steady_vs_transient_max_abs_wse_diff_m": 7.544040494522619e-07,
+    "check_wall_time_s": 412.98500088602304
+  },
+  "i_steady_ift_bump": {
+    "case": "forward_simulation/oneD_channel_with_bump",
+    "n_cells": 200,
+    "order": 2,
+    "newton_dtau0_s": 10.0,
+    "newton_iterations": 106,
+    "newton_final_max_residual": 1.2264524623887739e-14,
+    "newton_solve_time_s": 0.6337039014324546,
+    "newton_first_call_incl_compile_s": 3.6442315354943275,
+    "ift_gradient_time_s": 0.6974590066820383,
+    "ift_gradient_first_call_incl_compile_s": 5.293127876706421,
+    "fd_step": 1e-06,
+    "gradient_vs_fd": [
+      {
+        "index": [
+          1
+        ],
+        "ad": 6.953048852855937,
+        "fd": 6.953049153546331,
+        "rel_diff": 4.3245831824453694e-08
+      }
+    ],
+    "max_rel_diff": 4.3245831824453694e-08,
+    "transient_t_end_s": 2000.0,
+    "transient_rtol": 1e-08,
+    "transient_time_incl_compile_s": 46.41482378542423,
+    "transient_final_max_abs_dUdt": 1.5055832091790365e-07,
+    "steady_vs_transient_max_abs_wse_diff_m": 2.0352483864893856e-09,
+    "check_wall_time_s": 66.74457684531808
+  },
+  "iii_implicit_backward_euler": {
+    "description": "backward Euler, dt = 30 s, 600 s, hydrograph valley",
+    "note": "at dt = 60 s, FD runs with Q knots 2 and 4 perturbed by +0.05 m^3/s fail in Newton (step 9, wet front); FD there is invalid, not the adjoint",
+    "n_cells": 500,
+    "order": 2,
+    "time_steps": 20,
+    "newton_tol": 1e-10,
+    "forward_time_s": 3.862794889137149,
+    "gradient_time_s": 8.668592270463705,
+    "gradient_first_call_incl_compile_s": 29.32162638194859,
+    "gradient_over_forward_cost": 2.244124401956028,
+    "fd_step_m3_per_s": 0.0005,
+    "gradient_vs_fd": [
+      {
+        "index": [
+          0,
+          0
+        ],
+        "ad": 0.00034867819782010833,
+        "fd": 0.0003486781410266815,
+        "rel_diff": 1.6288209714984645e-07
+      },
+      {
+        "index": [
+          0,
+          1
+        ],
+        "ad": 0.0012134053004182657,
+        "fd": 0.0012134049436340888,
+        "rel_diff": 2.940355391884356e-07
+      },
+      {
+        "index": [
+          0,
+          2
+        ],
+        "ad": 0.002144084474237737,
+        "fd": 0.00214408370391439,
+        "rel_diff": 3.592785791761358e-07
+      },
+      {
+        "index": [
+          0,
+          3
+        ],
+        "ad": 0.005639325191553676,
+        "fd": 0.005639325186379551,
+        "rel_diff": 9.17507830515497e-10
+      },
+      {
+        "index": [
+          0,
+          4
+        ],
+        "ad": 0.004543560722504358,
+        "fd": 0.004543560279124392,
+        "rel_diff": 9.758425954904901e-08
+      }
+    ],
+    "max_rel_diff": 3.592785791761358e-07,
+    "check_wall_time_s": 106.26222125720233
+  },
+  "iv_forward_vs_reverse": {
+    "case": "sensitivity_analysis/ManningN/oneD_channel_with_bump",
+    "n_cells": 200,
+    "order": 2,
+    "solver": "Tsit5(), rtol 1e-7, atol 1e-10",
+    "t_end_s": 200.0,
+    "forward_mode_jacobian_time_incl_compile_s": 284.385116209276,
+    "reverse_mode_gradient_time_s": 42.54233906045556,
+    "reverse_mode_first_call_incl_compile_s": 50.62329422496259,
+    "fd_step": 1e-05,
+    "fd_rtol": 1e-10,
+    "per_zone": [
+      {
+        "index": [
+          1
+        ],
+        "fd": 37.7488873664511,
+        "forward_mode": 37.748821646059746,
+        "reverse_mode": 37.74880233622539,
+        "rel_diff_reverse_fd": 2.2525227005131747e-06,
+        "rel_diff_forward_fd": 1.7409888327776653e-06,
+        "rel_diff_forward_reverse": 5.115350199797543e-07
+      },
+      {
+        "index": [
+          2
+        ],
+        "fd": 26.1786748165127,
+        "forward_mode": 26.17860388727073,
+        "reverse_mode": 26.178591424837734,
+        "rel_diff_reverse_fd": 3.1854811426013208e-06,
+        "rel_diff_forward_fd": 2.709428283460886e-06,
+        "rel_diff_forward_reverse": 4.760543756026711e-07
+      }
+    ],
+    "max_rel_diff_forward_reverse": 5.115350199797543e-07,
+    "max_rel_diff_forward_fd": 2.709428283460886e-06,
+    "max_rel_diff_reverse_fd": 3.1854811426013208e-06,
+    "check_wall_time_s": 476.27340515423566
+  },
+  "ii_explicit_ssprk3_checkpointed_reverse": {
+    "description": "SSPRK3 (order 2, CFL 0.25), 500 cells, 1200 s, wetting flood",
+    "n_cells": 500,
+    "order": 2,
+    "time_steps": 12249,
+    "checkpoints": 64,
+    "wet_cells_initial": 100,
+    "wet_cells_final": 500,
+    "forward_time_s": 15.52660764940083,
+    "gradient_time_s": 101.93205316644162,
+    "gradient_first_call_incl_compile_s": 113.48777195625007,
+    "gradient_over_forward_cost": 6.5649918815572805,
+    "fd_step_m3_per_s": 0.01,
+    "gradient_vs_fd": [
+      {
+        "index": [
+          0,
+          0
+        ],
+        "ad": -0.09357045401890095,
+        "fd": -0.09362998358461994,
+        "rel_diff": 0.0006357959644966416
+      },
+      {
+        "index": [
+          0,
+          1
+        ],
+        "ad": -0.1723906660730709,
+        "fd": -0.172380958707663,
+        "rel_diff": 5.6313443669602604e-05
+      },
+      {
+        "index": [
+          0,
+          2
+        ],
+        "ad": -0.08084450827881846,
+        "fd": -0.08084458683548235,
+        "rel_diff": 9.71699738438841e-07
+      }
+    ],
+    "max_rel_diff": 0.0006357959644966416,
+    "check_wall_time_s": 328.2236164556816,
+    "note": "FD-AD gap (~1e-4 to 6e-4) comes from the CFL step-size choice, which depends on Q but is not differentiated (dt is treated as a constant in the adjoint)"
+  }
+}
