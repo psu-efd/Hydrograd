@@ -27,3 +27,8 @@ cfd/
 
 # Development notes (kept locally, not published)
 plan/
+
+# Scripts that draw the schematic figures of the paper (kept locally; the figures are tracked)
+paper/fig01_overview.py
+paper/fig01_overview_svg.py
+paper/fig02_mesh_jacobian.py
