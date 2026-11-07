@@ -11,7 +11,7 @@ Differentiable finite-volume solver for the 2D shallow water equations (SWEs) an
 
 *Overview of Hydrograd v2.0. Inputs and parameters define the discrete residual on the unstructured mesh; the state is computed by steady Newton iteration, explicit or implicit time stepping; each solver has a matching gradient method (implicit function theorem, checkpointed reverse-mode AD, per-step adjoint), and the gradient of the loss drives the calibration or closure learning.*
 
-**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The scripts and data of the model description paper (Liu, *Hydrograd v2.0:  differentiable shallow-water modelling on unstructured meshes*, in preparation), which reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff).
+**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The scripts and data of the model description paper (Liu, *Hydrograd v2.0:  differentiable shallow-water modelling on unstructured meshes*, in preparation), which reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff). Releases are archived on Zenodo: [doi:10.5281/zenodo.24045387](https://doi.org/10.5281/zenodo.24045387) (all versions; v2.0.0 is [doi:10.5281/zenodo.24045388](https://doi.org/10.5281/zenodo.24045388)).
 
 Hydrograd v2.0 succeeds [Hydrograd.jl](https://github.com/psu-efd/Hydrograd.jl) (v1.0, Julia; Liu & Song 2025, *Water Resources Research*, doi:10.1029/2025WR040265). It keeps the same case files and run-control format, so v1.0 cases run unchanged.
 
