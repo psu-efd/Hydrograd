@@ -28,10 +28,10 @@ Cases (all SI units; g = 9.81 m/s^2)
     WSE 0.33 m, z_b = 0.2 - 0.05 (x - 10)^2 for 8 < x < 12 m, Manning's n = 0.02 s/m^(1/3)
     as in the example (the analytical solution is frictionless). Steady state by
     pseudo-transient Newton; WSE compared with FullSWOF's analytical solution.
-(e) Grid convergence on smooth subcritical flow over the same bump (q = 4.42 m^2/s, outlet depth
+(f) Grid convergence on smooth subcritical flow over the same bump (q = 4.42 m^2/s, outlet depth
     2 m, near frictionless), exact Bernoulli depth; ``benchmarks/validation/convergence_bump.py``.
     The L1 depth error e = mean |h - h_exact| (m) is fitted as e ~ dx^p, with dx the cell size.
-(f) Close-up of the hydraulic jump of (d).
+(e) Close-up of the hydraulic jump of (d).
 
 Error norms: L1 = mean over cells of |h - h_exact| (m); RMS and max of the WSE error (m);
 relative mass change (V_end - V_0) / V_0 with V = sum h A (m^3).
@@ -327,7 +327,7 @@ def run_lake_at_rest(order: int, work_dir: Path) -> tuple[dict, dict]:
 
 
 # ----------------------------------------------------------------------
-# (d), (f): transcritical bump (Hydrograd.jl example) vs FullSWOF analytical
+# (d), (e): transcritical bump (Hydrograd.jl example) vs FullSWOF analytical
 # ----------------------------------------------------------------------
 def run_bump(work_dir: Path, manning_n: float | None) -> tuple[dict, dict]:
     """Steady transcritical bump flow at orders 1 and 2 vs the analytical WSE.
@@ -441,7 +441,7 @@ def run_bump(work_dir: Path, manning_n: float | None) -> tuple[dict, dict]:
 
 
 # ----------------------------------------------------------------------
-# (e): grid convergence on the smooth subcritical bump
+# (f): grid convergence on the smooth subcritical bump
 # ----------------------------------------------------------------------
 def run_convergence(work_dir: Path) -> dict:
     """L1 depth error against the exact Bernoulli depth on a sequence of meshes.
@@ -613,6 +613,7 @@ def plot() -> None:
         ax.set_title(title, fontsize=10)
         ax.text(0.04, 0.05, r"$t = 60$ s", transform=ax.transAxes, fontsize=9)
     axes[0, 0].legend(loc="upper right")
+    axes[0, 1].legend(loc="upper right")
 
     # (c): lake at rest, bed and water surface along the island centre line.
     ax = axes[0, 2]
@@ -640,8 +641,15 @@ def plot() -> None:
     ax.legend(loc="lower right", fontsize=8, handlelength=1.3, handletextpad=0.4)
     ax.set_title("Transcritical bump", fontsize=10)
 
-    # (e): grid convergence with reference slopes 1 and 2.
+    # (e): close-up of the hydraulic jump.
     ax = axes[1, 1]
+    draw_bump(ax, data, order1_style, order2_style, REFERENCE)
+    ax.set_xlim(10.5, 13.0)
+    ax.set_ylim(0.0, 0.45)
+    ax.set_title("Hydraulic jump (close-up)", fontsize=10)
+
+    # (f): grid convergence with reference slopes 1 and 2.
+    ax = axes[1, 2]
     dx = data["conv_dx"]
     fit1 = numbers["convergence_subcritical_bump"]["fit_order_o1"]
     fit2 = numbers["convergence_subcritical_bump"]["fit_order_o2"]
@@ -667,13 +675,6 @@ def plot() -> None:
     ax.set_ylim(top=1.5e-1)
     ax.legend(loc="upper left", fontsize=8, handlelength=2.2, handletextpad=0.4)
     ax.set_title("Grid convergence", fontsize=10)
-
-    # (f): close-up of the hydraulic jump.
-    ax = axes[1, 2]
-    draw_bump(ax, data, order1_style, order2_style, REFERENCE)
-    ax.set_xlim(10.5, 13.0)
-    ax.set_ylim(0.0, 0.45)
-    ax.set_title("Hydraulic jump (close-up)", fontsize=10)
 
     # Panel labels and spacing.
     for label, ax in zip("abcdef", axes.flat):
