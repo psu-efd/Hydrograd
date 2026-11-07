@@ -13,7 +13,8 @@ Pipeline
    w_still (m), and unit discharges q_x, q_y (m^2/s), as in ``process_ICs_2D.jl``.
 5. Flow-resistance model: constant Manning's n per material zone, an n(h, |U|, ks) law,
    or a neural-network closure (UDE mode).
-6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`), side-wall
+6. Optional vegetation drag (``"vegetation"`` block, see :func:`_vegetation`),
+   Darcy-Forchheimer drag of porous zones (``"porous"`` block, see :func:`_porous`), side-wall
    friction (``"wall_friction"`` block, see :func:`_wall_friction`) and
    horizontal eddy viscosity (``"turbulence"`` block, see :func:`_turbulence`).
 7. The static :class:`~hydrograd.physics.model.SWEModel`, optional ``"numerics"``
@@ -54,6 +55,8 @@ from hydrograd.io.srh2d import SRHCase, read_srh_case
 from hydrograd.mesh import Mesh, build_mesh
 from hydrograd.params.manning import ManningLaw
 from hydrograd.physics.model import (
+    Dispersion,
+    Porous,
     Resistance,
     SWEModel,
     Turbulence,
@@ -61,6 +64,7 @@ from hydrograd.physics.model import (
     WallFriction,
     build_model,
 )
+from hydrograd.physics.porous import WATER_VISCOSITY, ergun_coefficients
 from hydrograd.solvers.ode import ODESettings
 
 logger = logging.getLogger(__name__)
@@ -366,7 +370,7 @@ def _per_material(values: Any, n_materials: int, default: float, name: str) -> t
     # A list gives the value of every material in ID order.
     if isinstance(values, list):
         if len(values) != n_materials:
-            raise ValueError(f"vegetation.{name}: expected {n_materials} values, got {len(values)}")
+            raise ValueError(f"{name}: expected {n_materials} values, got {len(values)}")
         return tuple(float(v) for v in values)
 
     # A dict gives values for some material IDs.
@@ -374,7 +378,7 @@ def _per_material(values: Any, n_materials: int, default: float, name: str) -> t
     for key, value in values.items():
         material = int(key)
         if not 0 <= material < n_materials:
-            raise ValueError(f"vegetation.{name}: no material ID {material}")
+            raise ValueError(f"{name}: no material ID {material}")
         expanded[material] = float(value)
     return tuple(expanded)
 
@@ -412,13 +416,13 @@ def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
 
     # Frontal area per unit volume a (1/m): given directly, or from d and the spacing.
     if "a" in block:
-        a_zone = _per_material(block["a"], n_materials, 0.0, "a")
+        a_zone = _per_material(block["a"], n_materials, 0.0, "vegetation.a")
     else:
-        diameters = _per_material(block["d"], n_materials, 0.0, "d")
-        spacings = _per_material(block["spacing"], n_materials, 1.0, "spacing")
+        diameters = _per_material(block["d"], n_materials, 0.0, "vegetation.d")
+        spacings = _per_material(block["spacing"], n_materials, 1.0, "vegetation.spacing")
         a_zone = tuple(d / s ** 2 for d, s in zip(diameters, spacings, strict=True))
 
-    CD_zone = _per_material(block.get("CD", 1.0), n_materials, 1.0, "CD")
+    CD_zone = _per_material(block.get("CD", 1.0), n_materials, 1.0, "vegetation.CD")
 
     # Constant C_D per zone (forward, sensitivity, inversion of veg_CD).
     if not is_cd_network:
@@ -444,6 +448,69 @@ def _vegetation(ctrl: Control, n_materials: int) -> Vegetation:
     )
 
 
+def _porous(ctrl: Control, n_materials: int) -> Porous:
+    """Darcy-Forchheimer settings from the optional ``"porous"`` block of the run control.
+
+    Examples (material 3 is a porous zone)::
+
+        "porous": {"alpha": {"3": 0.02}, "beta": {"3": 4.0}}
+        "porous": {"porosity": {"3": 0.9}, "d": {"3": 0.01}, "viscosity": 1e-6}
+
+    ``alpha`` (1/s) and ``beta`` (1/length) are the coefficients of the drag
+    (alpha + beta |u|) u h per unit plan area (``physics.porous``). Alternatively the
+    porosity epsilon (-) and the grain or stem diameter ``d`` (length) give them through
+    Ergun's equation; the kinematic viscosity ``viscosity`` (length^2/s) defaults to
+    1e-6 m^2/s. Explicit ``alpha`` or ``beta`` entries override the Ergun values of the
+    listed materials. Materials not listed get no porous drag.
+
+    Args:
+        ctrl: run control.
+        n_materials: number of material IDs.
+
+    Returns:
+        The porous-zone settings (mode ``none`` if the block is absent).
+    """
+    block = ctrl.raw.get("porous")
+    if not block:
+        return Porous()
+
+    # Start from zero drag in every material.
+    alpha_zone = [0.0] * n_materials
+    beta_zone = [0.0] * n_materials
+
+    # Ergun coefficients for the materials with a porosity (porosity 1 = no drag).
+    if "porosity" in block:
+        porosities = _per_material(block["porosity"], n_materials, 1.0, "porous.porosity")
+        diameters = _per_material(block.get("d", 1.0), n_materials, 1.0, "porous.d")
+        viscosity = float(block.get("viscosity", WATER_VISCOSITY))
+        for material in range(n_materials):
+            if porosities[material] < 1.0:
+                alpha, beta = ergun_coefficients(
+                    porosities[material], diameters[material], viscosity
+                )
+                alpha_zone[material] = alpha
+                beta_zone[material] = beta
+
+    # Explicit coefficients replace the Ergun values of the materials they list.
+    for key, zone in (("alpha", alpha_zone), ("beta", beta_zone)):
+        if key not in block:
+            continue
+        given = _per_material(block[key], n_materials, float("nan"), f"porous.{key}")
+        for material, value in enumerate(given):
+            if not np.isnan(value):
+                zone[material] = value
+
+    if min(alpha_zone) < 0.0 or min(beta_zone) < 0.0:
+        raise ValueError("porous: alpha and beta must be non-negative")
+
+    logger.info(
+        "porous zones: alpha %s 1/s, beta %s 1/m",
+        np.array2string(np.asarray(alpha_zone), precision=4),
+        np.array2string(np.asarray(beta_zone), precision=4),
+    )
+    return Porous(mode="zone", alpha_zone=tuple(alpha_zone), beta_zone=tuple(beta_zone))
+
+
 def _turbulence(ctrl: Control) -> Turbulence:
     """Eddy-viscosity settings from the optional ``"turbulence"`` block of the run control.
 
@@ -451,9 +518,15 @@ def _turbulence(ctrl: Control) -> Turbulence:
 
         "turbulence": {"model": "parabolic", "coefficient": 0.7, "nu0": 1e-6}
         "turbulence": {"model": "constant", "nu_t": 0.01}
+        "turbulence": {"model": "mixing_length", "coefficient": 0.7,
+                       "mixing_coefficient": 0.3}
+        "turbulence": {"model": "k_epsilon", "initial_speed": 0.1}
 
     The parabolic model is nu_t = C_t u_* h + nu_0 (SRH-2D); C_t is differentiable as
-    ``theta["eddy_Ct"]``.
+    ``theta["eddy_Ct"]``. The mixing-length model adds (C_m h)^2 |S| (``mixing_coefficient``
+    = C_m, differentiable as ``theta["eddy_Cm"]``). The k-epsilon model (Rastogi & Rodi
+    1978) transports h k and h epsilon as state rows 3 and 4; its constants (``c_mu``,
+    ``c_1``, ``c_2``, ``sigma_k``, ``sigma_e``) default to the standard values.
 
     Args:
         ctrl: run control.
@@ -466,14 +539,27 @@ def _turbulence(ctrl: Control) -> Turbulence:
         return Turbulence()
 
     model = block.get("model", "parabolic")
-    if model not in ("parabolic", "constant"):
-        raise ValueError(f"turbulence.model must be 'parabolic' or 'constant', got {model!r}")
+    if model not in ("parabolic", "constant", "mixing_length", "k_epsilon"):
+        raise ValueError(
+            "turbulence.model must be 'parabolic', 'constant', 'mixing_length' or "
+            f"'k_epsilon', got {model!r}"
+        )
+
+    # k-epsilon constants: standard values unless given.
+    defaults = Turbulence()
+    k_epsilon = {
+        key: float(block.get(key, getattr(defaults, key)))
+        for key in ("c_mu", "c_1", "c_2", "sigma_k", "sigma_e", "k_min", "eps_min",
+                    "initial_speed")
+    }
 
     return Turbulence(
         mode=model,
         coefficient=float(block.get("coefficient", 0.7)),
         nu0=float(block.get("nu0", 1.0e-6)),
         nu_constant=float(block.get("nu_t", 0.0)),
+        mixing_coefficient=float(block.get("mixing_coefficient", 0.0)),
+        **k_epsilon,
     )
 
 
@@ -509,6 +595,59 @@ def _wall_friction(ctrl: Control, unit_system: str) -> WallFriction:
         ks=float(block.get("ks", 0.0)),
         nu=float(block.get("nu", default_nu)),
     )
+
+
+def _dispersion(ctrl: Control, n_materials: int) -> Dispersion:
+    """Momentum-coefficient settings from the optional ``"dispersion"`` block.
+
+    Example (beta = 1.3 in materials 2 and 3, 1 elsewhere)::
+
+        "dispersion": {"model": "zone", "beta": {"2": 1.3, "3": 1.3}}
+
+    ``beta`` is the momentum coefficient (-) per material ID (a number, a list, or a dict
+    as for the vegetation entries); it is differentiable as ``theta["disp_beta"]``.
+
+    Args:
+        ctrl: run control.
+        n_materials: number of material IDs.
+
+    Returns:
+        The dispersion settings (mode ``none``, beta = 1, if the block is absent).
+    """
+    block = ctrl.raw.get("dispersion")
+    if not block:
+        return Dispersion()
+
+    model = block.get("model", "zone")
+    if model != "zone":
+        raise ValueError(f"dispersion.model must be 'zone', got {model!r}")
+    beta_zone = _per_material(block.get("beta", 1.0), n_materials, 1.0, "dispersion.beta")
+    return Dispersion(mode="zone", beta_zone=beta_zone)
+
+
+def initial_turbulence(model: SWEModel, U0: Array) -> Array:
+    """Append the k-epsilon rows h k and h epsilon to a hydraulic state at local equilibrium.
+
+    k and epsilon are the uniform-flow equilibrium values of each cell
+    (``physics.k_epsilon.equilibrium``) at the speed max(|U|, initial_speed), so that a
+    still initial state starts with some turbulence.
+
+    Args:
+        model: the model (k-epsilon settings, Manning's n).
+        U0: hydraulic state [xi, q_x, q_y], shape [3, n_cells].
+
+    Returns:
+        State [xi, q_x, q_y, h k, h epsilon], shape [5, n_cells].
+    """
+    from hydrograd.physics.k_epsilon import equilibrium
+    from hydrograd.physics.rhs import manning_n_cells
+
+    h = jnp.maximum(U0[0] + model.hstill, model.h_small)
+    speed = jnp.sqrt(U0[1] ** 2 + U0[2] ** 2) / h
+    speed = jnp.maximum(speed, model.turbulence.initial_speed)
+    manning_n = manning_n_cells(model, {}, h, U0[1], U0[2])
+    k, epsilon = equilibrium(model, h, speed, manning_n)
+    return jnp.concatenate([U0, jnp.stack([h * k, h * epsilon])])
 
 
 def setup_case(ctrl: Control) -> Case:
@@ -556,6 +695,11 @@ def setup_case(ctrl: Control) -> Case:
     if vegetation.mode != "none":
         model = dataclasses.replace(model, vegetation=vegetation)
 
+    # Extension: optional Darcy-Forchheimer drag of porous zones ("porous" block).
+    porous = _porous(ctrl, srh.mat.n_materials)
+    if porous.mode != "none":
+        model = dataclasses.replace(model, porous=porous)
+
     # Extension: optional horizontal eddy viscosity ("turbulence" block).
     turbulence = _turbulence(ctrl)
     if turbulence.mode != "none":
@@ -565,6 +709,11 @@ def setup_case(ctrl: Control) -> Case:
     wall_friction = _wall_friction(ctrl, unit)
     if wall_friction.mode != "none":
         model = dataclasses.replace(model, wall_friction=wall_friction)
+
+    # Extension: optional momentum coefficient beta ("dispersion" block).
+    dispersion = _dispersion(ctrl, srh.mat.n_materials)
+    if dispersion.mode != "none":
+        model = dataclasses.replace(model, dispersion=dispersion)
 
     # Extension: optional "numerics" block (scheme, spatial_order, limiter, checkpoints,
     # checkpoint_memory_gb).
@@ -583,11 +732,15 @@ def setup_case(ctrl: Control) -> Case:
         raise ValueError("the 'turbulence' block is available for scheme 'hr_hllc' only")
     if model.wall_friction.mode != "none" and model.scheme != "hr_hllc":
         raise ValueError("the 'wall_friction' block is available for scheme 'hr_hllc' only")
+    if model.dispersion.mode != "none" and model.scheme != "hr_hllc":
+        raise ValueError("the 'dispersion' block is available for scheme 'hr_hllc' only")
 
     # ------------------------------------------------------------------
     # 4. Initial state U0 = [xi, q_x, q_y] and ODE settings
     # ------------------------------------------------------------------
     U0 = jnp.stack([jnp.asarray(wse - wstill), jnp.asarray(qx), jnp.asarray(qy)])
+    if model.turbulence.mode == "k_epsilon":
+        U0 = initial_turbulence(model, U0)
     ode = _ode_settings(ctrl, tspan, dt)
 
     # Extension (numerics block): checkpointing of the reverse-mode adjoint.
@@ -600,8 +753,9 @@ def setup_case(ctrl: Control) -> Case:
         ode = dataclasses.replace(ode, checkpoints=checkpoints, checkpoint_memory_gb=memory_gb)
 
     logger.info(
-        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, vegetation=%s, solver=%s",
+        "Case ready: %d cells, %d faces, BCs %s, resistance=%s, vegetation=%s, porous=%s, "
+        "solver=%s",
         mesh.n_cells, mesh.n_faces, mesh.bc_types, resistance.mode, model.vegetation.mode,
-        ode.solver,
+        model.porous.mode, ode.solver,
     )
     return Case(ctrl, srh, mesh, model, U0, ode, wse, wstill, unit)

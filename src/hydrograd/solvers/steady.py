@@ -335,6 +335,8 @@ def newton_solve(
         dU = _solve(m, lin, R, 1.0 / dtau, transpose=False)
         U_new = U + dU
         U_new = U_new.at[0].set(jnp.maximum(U_new[0], xi_min))   # keep h >= floor
+        if U_new.shape[0] > 3:
+            U_new = U_new.at[3:].set(jnp.maximum(U_new[3:], 0.0))  # keep h k, h eps >= 0
         rn_new = jnp.max(jnp.abs(f(U_new)))
 
         # 4. Safeguard: reject steps that blow up the residual and shrink the pseudo-time

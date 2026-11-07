@@ -77,7 +77,9 @@ import jax.numpy as jnp
 from jax import Array
 
 from hydrograd.bed import bed_slope  # noqa: F401  (kept for API symmetry)
+from hydrograd.physics.dispersion import dispersive_flux_source
 from hydrograd.physics.hllc import hllc_flux
+from hydrograd.physics.k_epsilon import k_epsilon_rates
 from hydrograd.physics.model import KIND_INLET, SWEModel
 from hydrograd.physics.rhs import (
     _ghosts,
@@ -88,7 +90,7 @@ from hydrograd.physics.rhs import (
 from hydrograd.physics.turbulence import turbulent_diffusion
 from hydrograd.physics.walls import wall_shear_source
 
-__all__ = ["desingularized_velocity", "max_wave_speed", "rhs_hr"]
+__all__ = ["desingularized_velocity", "max_eddy_viscosity", "max_wave_speed", "rhs_hr"]
 
 # Differentiable parameters, e.g. {"n_zone": ..., "zb": ..., "Q": ..., "nn": ...}.
 Theta = dict[str, Any]
@@ -260,17 +262,19 @@ def rhs_hr(
     Args:
         m: the model (mesh, bed, boundary conditions, scheme settings).
         theta: differentiable parameters (Manning's n, bed, inflow, NN weights, ...).
-        U: state [xi, q_x, q_y], shape [3, n_cells].
+        U: state [xi, q_x, q_y], shape [3, n_cells]; with the k-epsilon model
+            [xi, q_x, q_y, h k, h epsilon], shape [5, n_cells].
         K: inlet conveyance weights for the discharge split, or None to compute them.
-        split: if True, return the friction part separately (for point-implicit friction).
+        split: if True, return the linear sinks separately (for point-implicit stepping).
 
     Returns:
-        If ``split`` is False: dU/dt, shape [3, n_cells] (units of U per second).
+        If ``split`` is False: dU/dt, shape [n_rows, n_cells] (units of U per second).
 
-        If ``split`` is True: a tuple ``(dU_flux, c_f)`` where ``dU_flux`` is the flux and
-        bed part of dU/dt, shape [3, n_cells], and ``c_f`` is the friction rate (1/s),
-        shape [n_cells]. The friction term is then -c_f * q, which the SSP-RK stepper
-        treats point-implicitly.
+        If ``split`` is True: a tuple ``(dU_flux, c)`` where ``dU_flux`` is dU/dt without
+        the sinks, and ``c`` the sink rate of every row (1/s), shape [n_rows, n_cells]:
+        0 for xi, the friction rate c_f for q_x and q_y, and epsilon / k and
+        c_2 epsilon / k for h k and h epsilon. The sinks are -c * U, which the SSP-RK
+        stepper treats point-implicitly.
     """
     g = m.g
 
@@ -387,9 +391,19 @@ def rhs_hr(
     )
     dU = -(net_outflow / m.area[:, None]).T
 
+    # Optional k-epsilon transport (rows 3 and 4); its nu_t drives the momentum diffusion.
+    k_epsilon = m.turbulence.mode == "k_epsilon"
+    if k_epsilon:
+        turbulence_rates, turbulence_sinks, nu_ke = k_epsilon_rates(
+            m, theta, h, u, v, U, manning_n, F_h * face_length, G_h * m.fb_L
+        )
+
     # Optional horizontal turbulent diffusion div(h nu_t grad u) (explicit part of the
     # rate; models without a turbulence block skip it and stay bit-identical).
-    if m.turbulence.mode != "none":
+    if k_epsilon:
+        nu_momentum = nu_ke + m.turbulence.nu0
+        dU = dU + turbulent_diffusion(m, theta, h, u, v, manning_n, nu_momentum)
+    elif m.turbulence.mode != "none":
         dU = dU + turbulent_diffusion(m, theta, h, u, v, manning_n)
 
     # Optional shear stress of the side walls (log-law wall function); without it WALL
@@ -397,16 +411,57 @@ def rhs_hr(
     if m.wall_friction.mode != "none":
         dU = dU + wall_shear_source(m, theta, h, u, v)
 
+    # Optional dispersive momentum flux (beta - 1) h U U from sub-cell velocity
+    # variations (momentum coefficient beta > 1, e.g. inside stem patches).
+    if m.dispersion.mode != "none":
+        dU = dU + dispersive_flux_source(m, theta, h, u, v)
+
     # ------------------------------------------------------------------
     # 5. Bed friction: -c_f q in the momentum equations
     # ------------------------------------------------------------------
     c_f = friction_coefficient(m, theta, h_floor, qx, qy, manning_n)
 
-    if split:
-        return dU, c_f
+    # Sink rate of every row (1/s): none for xi, friction for the discharges, and the
+    # dissipation sinks of h k and h epsilon.
+    sink_rates = jnp.stack([jnp.zeros_like(c_f), c_f, c_f])
+    if k_epsilon:
+        dU = jnp.concatenate([dU, turbulence_rates])
+        sink_rates = jnp.concatenate([sink_rates, turbulence_sinks])
 
-    friction = jnp.stack([jnp.zeros_like(c_f), c_f * qx, c_f * qy])
-    return dU - friction
+    if split:
+        return dU, sink_rates
+
+    if not k_epsilon:
+        friction = jnp.stack([jnp.zeros_like(c_f), c_f * qx, c_f * qy])
+        return dU - friction
+    return dU - sink_rates * jnp.concatenate([jnp.stack([U[0], qx, qy]), U[3:]])
+
+
+def max_eddy_viscosity(m: SWEModel, theta: Theta, U: Array) -> Array:
+    """Largest eddy viscosity nu_t over all cells (m^2/s), for the explicit diffusion limit.
+
+    Args:
+        m: the model (turbulence settings).
+        theta: differentiable parameters.
+        U: state, shape [n_rows, n_cells].
+
+    Returns:
+        Scalar maximum nu_t (m^2/s); 0 without turbulent diffusion.
+    """
+    from hydrograd.physics.k_epsilon import turbulence_variables
+    from hydrograd.physics.turbulence import eddy_viscosity
+
+    if m.turbulence.mode == "none":
+        return jnp.asarray(0.0)
+
+    _, h, u, v = _cell_state(m, theta, U)
+    if m.turbulence.mode == "k_epsilon":
+        nu_t = turbulence_variables(m, h, U)[2] + m.turbulence.nu0
+    else:
+        h_floor = jnp.maximum(h, m.h_small)
+        manning_n = manning_n_cells(m, theta, h_floor, h * u, h * v)
+        nu_t = eddy_viscosity(m, theta, h, u, v, manning_n)
+    return jnp.max(nu_t)
 
 
 def max_wave_speed(m: SWEModel, theta: Theta, U: Array) -> Array:

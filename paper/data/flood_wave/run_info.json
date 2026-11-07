@@ -1,0 +1,13 @@
+{
+ "device": "NVIDIA A100-PCIE-40GB",
+ "cells": 16000,
+ "order": 2,
+ "wall_s": 249.04041507467628,
+ "wall_first_call_incl_compile_s": 253.06105553358793,
+ "simulated_h": 6.0,
+ "dt_series_s": 60.0,
+ "valley_area_m2": 400000.0,
+ "bankfull_m3s_approx": 120.0,
+ "solver": "SSPRK3() CFL-limited",
+ "n_steps": 402540
+}

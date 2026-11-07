@@ -1,0 +1,113 @@
+{
+  "case": "oneD_channel_with_bump (refined, 200 cells), steady truth with sigmoid n(h)",
+  "true_law": {
+    "n_lower": 0.03,
+    "n_upper": 0.06,
+    "k": 100.0,
+    "h_mid": 0.3,
+    "form": "n = n_lo + (n_hi - n_lo)/(1 + exp(k (h - h_mid)))"
+  },
+  "depth_range_of_data_m": [
+    0.13996587760262474,
+    0.44801378022449667
+  ],
+  "nn": {
+    "layers": [
+      1,
+      3,
+      3,
+      1
+    ],
+    "activations": [
+      "tanh",
+      "tanh"
+    ],
+    "layernorm": false,
+    "h_bounds_m": [
+      0.1,
+      0.5
+    ],
+    "output_bounds": [
+      0.03,
+      0.06
+    ],
+    "init": "jax.random.PRNGKey(1111), identical for both paths"
+  },
+  "optimizer": {
+    "name": "Adam",
+    "learning_rate": 0.1,
+    "iterations": 100
+  },
+  "loss": "L_WSE + L_uv of the final/steady state (package losses.data_losses)",
+  "numerics": {
+    "scheme": "hr_hllc",
+    "spatial_order": 2,
+    "transient_tspan_s": [
+      0.0,
+      100.0
+    ],
+    "transient_gradient": "reverse mode, diffrax checkpointing ('auto')",
+    "steady_gradient": "IFT, one transposed sparse solve"
+  },
+  "initial_losses_agree": true,
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Gold 6342 CPU @ 2.80GHz",
+    "cores_available": 8,
+    "host": "p-sc-2171",
+    "jax_backend": "cpu",
+    "jax_version": "0.11.2",
+    "float": "float64"
+  },
+  "speedup_per_iteration": 254.82905332498305,
+  "speedup_total": 95.93507601120652,
+  "steady": {
+    "ode_solver": "SteadyNewton()",
+    "n_iterations": 100,
+    "first_iteration_incl_compile_s": 6.327201893553138,
+    "time_per_iteration_median_s": 0.05707001592963934,
+    "time_per_iteration_mean_s": 0.07870420371182263,
+    "total_training_time_s": 15.442167039960623,
+    "initial_loss": 0.008553009120478492,
+    "final_loss": 3.7844144501351213e-07,
+    "min_loss": 3.7844144501351213e-07,
+    "rms_n_error_grid_s_per_m13": 0.0015877448290066802,
+    "rms_n_error_cells_s_per_m13": 0.0008584596032459844,
+    "max_n_error_grid_s_per_m13": 0.005942111277410095,
+    "steady_wse_rms_error_m": 8.280216889095882e-05,
+    "nn_parameters": 22
+  },
+  "transient": {
+    "ode_solver": "Tsit5()",
+    "n_iterations": 100,
+    "first_iteration_incl_compile_s": 22.971390082500875,
+    "time_per_iteration_median_s": 14.543098132591695,
+    "time_per_iteration_mean_s": 14.564148269360885,
+    "total_training_time_s": 1481.4454687563702,
+    "initial_loss": 0.008557275257307985,
+    "final_loss": 1.0845098168149865e-06,
+    "min_loss": 1.0635320096788853e-06,
+    "rms_n_error_grid_s_per_m13": 0.0015346672883404628,
+    "rms_n_error_cells_s_per_m13": 0.0008989547078851305,
+    "max_n_error_grid_s_per_m13": 0.0056577758744111376,
+    "steady_wse_rms_error_m": 0.00011903015053874834,
+    "nn_parameters": 22,
+    "steady_state_check_trained": {
+      "t_end_s": 100.0,
+      "max_abs_dUdt": 0.00018504391899743563,
+      "max_abs_dxi_dt_m_per_s": 3.738694615765618e-05,
+      "max_abs_wse_diff_to_steady_m": 0.0002342993558501344,
+      "rtol": 1e-07,
+      "atol": 1e-10,
+      "tsit5_steps": 2393
+    },
+    "steady_state_check_initial": {
+      "t_end_s": 100.0,
+      "max_abs_dUdt": 7.647264333523335e-06,
+      "max_abs_dxi_dt_m_per_s": 4.390534783075436e-06,
+      "max_abs_wse_diff_to_steady_m": 9.940596495697229e-05,
+      "rtol": 1e-07,
+      "atol": 1e-10,
+      "tsit5_steps": 2391
+    }
+  }
+}

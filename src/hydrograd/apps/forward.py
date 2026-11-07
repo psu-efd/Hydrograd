@@ -88,7 +88,8 @@ def derived_fields(
         ``h``, ``wse`` (m); ``u``, ``v`` (m/s); ``q_x``, ``q_y`` (m^2/s); ``zb`` (m);
         ``ManningN`` (s/m^(1/3)); ``friction_x``, ``friction_y`` (momentum source,
         m^2/s^2). For an n-law model also ``ks``, ``h_ks`` (m), ``friction_factor`` (-)
-        and ``Re`` (-).
+        and ``Re`` (-). With k-epsilon also ``k`` (m^2/s^2), ``epsilon`` (m^2/s^3) and
+        ``nu_t`` (m^2/s).
     """
     Uj = jnp.asarray(U)
 
@@ -120,6 +121,15 @@ def derived_fields(
         "friction_x": np.asarray(fx),
         "friction_y": np.asarray(fy),
     }
+
+    # k-epsilon fields: k (m^2/s^2), epsilon (m^2/s^3) and the eddy viscosity (m^2/s).
+    if Uj.shape[0] > 3:
+        from hydrograd.physics.k_epsilon import turbulence_variables
+
+        k, epsilon, nu_t = turbulence_variables(m, jnp.maximum(Uj[0] + hs, 0.0), Uj)
+        out["k"] = np.asarray(k)
+        out["epsilon"] = np.asarray(epsilon)
+        out["nu_t"] = np.asarray(nu_t)
 
     # Extra diagnostics of the n(h, |U|, ks) law.
     if m.resistance.mode == "law":

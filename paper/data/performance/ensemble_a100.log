@@ -1,0 +1,7 @@
+device: NVIDIA A100-PCIE-40GB
+batch    1:     6.9 s,   0.14 members/s (  1.0x the throughput of batch 1)
+batch    2:    10.0 s,   0.20 members/s (  1.4x the throughput of batch 1)
+batch    8:    12.0 s,   0.67 members/s (  4.6x the throughput of batch 1)
+batch   32:    17.8 s,   1.80 members/s ( 12.4x the throughput of batch 1)
+batch  128:    43.6 s,   2.93 members/s ( 20.2x the throughput of batch 1)
+batch  256:    76.4 s,   3.35 members/s ( 23.1x the throughput of batch 1)

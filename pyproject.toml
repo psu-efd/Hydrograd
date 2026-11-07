@@ -1,10 +1,11 @@
 [project]
 name = "hydrograd"
-version = "0.1.0.dev0"
-description = "Differentiable finite-volume solver for the 2D shallow water equations and Universal SWEs (Python/JAX port of Hydrograd.jl)"
+version = "2.0.0"
+description = "Differentiable finite-volume solver for the 2D shallow water equations and Universal SWEs (v2.0, the Python/JAX version of Hydrograd; v1.0 is Hydrograd.jl)"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Xiaofeng Liu" }]
+license = { text = "MIT" }
 dependencies = [
     "jax>=0.4.30",
     "diffrax>=0.6",

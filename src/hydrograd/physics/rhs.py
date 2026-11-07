@@ -52,6 +52,7 @@ from hydrograd.physics.model import (
     KIND_WALL,
     SWEModel,
 )
+from hydrograd.physics.porous import porous_drag_rate
 from hydrograd.physics.roe import roe_flux, smooth_sqrt
 from hydrograd.physics.vegetation import vegetation_drag_rate
 
@@ -177,11 +178,14 @@ def friction_coefficient(
     """Friction rate c (1/s) per cell, with friction = c q.
 
     c is the bed friction (Manning, or the NN magnitude / |q|) plus, if the model has
-    vegetation, the stem drag rate c_veg = 1/2 C_D a |u| (``physics.vegetation``).
+    vegetation, the stem drag rate c_veg = 1/2 C_D a |u| (``physics.vegetation``), plus,
+    if it has porous zones, the Darcy-Forchheimer rate c_df = alpha + beta |u|
+    (``physics.porous``).
 
     Args:
         m: the model (``g``, ``k_n``, ``h_small``, resistance mode, vegetation).
-        theta: differentiable parameters (NN weights, ``veg_CD``, ``veg_a``).
+        theta: differentiable parameters (NN weights, ``veg_CD``, ``veg_a``,
+            ``df_alpha``, ``df_beta``).
         h: water depth (m), shape [n_cells].
         qx, qy: unit discharges (m^2/s), shape [n_cells].
         n: Manning's n (s/m^(1/3)), shape [n_cells].
@@ -189,14 +193,18 @@ def friction_coefficient(
     Returns:
         Friction rate c (1/s), shape [n_cells].
     """
-    c_bed = _bed_friction_coefficient(m, theta, h, qx, qy, n)
+    c = _bed_friction_coefficient(m, theta, h, qx, qy, n)
 
-    # No vegetation: the bed friction only (keeps earlier results bit-identical).
-    if m.vegetation.mode == "none":
-        return c_bed
+    # Stem drag adds to the bed friction. Without vegetation the bed friction is returned
+    # unchanged (keeps earlier results bit-identical).
+    if m.vegetation.mode != "none":
+        c = c + vegetation_drag_rate(m, theta, h, qx, qy)
 
-    # Stem drag adds to the bed friction.
-    return c_bed + vegetation_drag_rate(m, theta, h, qx, qy)
+    # Darcy-Forchheimer drag of porous zones adds in the same way.
+    if m.porous.mode != "none":
+        c = c + porous_drag_rate(m, theta, h, qx, qy)
+
+    return c
 
 
 def _bed_friction_coefficient(

@@ -44,7 +44,10 @@ from hydrograd.params.manning import ManningLaw
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["UNITS", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model"]
+__all__ = [
+    "UNITS", "Porous", "Resistance", "SWEModel", "Turbulence", "Vegetation", "build_model",
+    "n_state",
+]
 
 # GridUnit -> (unit system, k_n, g (length/s^2)). k_n is the unit factor of Manning's
 # formula: U = (k_n / n) R^(2/3) S^(1/2).
@@ -133,6 +136,30 @@ class Vegetation:
 
 
 @dataclass(frozen=True)
+class Porous:
+    """Darcy-Forchheimer drag of a porous zone, as a momentum sink per unit plan area.
+
+    The drag force per unit plan area divided by the water density is
+
+        F / rho = (alpha + beta |u|) u h     (m^2/s^2),
+
+    with u the depth-averaged (superficial) velocity (m/s) and h the depth (m). With
+    q = h u it equals c_df q, where c_df = alpha + beta |u| (1/s); this rate is added to
+    the bed-friction rate (see ``physics.porous``).
+
+    Attributes:
+        mode: ``none`` (no porous drag, default) or ``zone`` (coefficients per material).
+        alpha_zone: linear (Darcy) coefficient alpha for each material ID (1/s); 0 outside
+            porous zones.
+        beta_zone: quadratic (Forchheimer) coefficient beta for each material ID (1/m).
+    """
+
+    mode: str = "none"
+    alpha_zone: tuple[float, ...] = ()
+    beta_zone: tuple[float, ...] = ()
+
+
+@dataclass(frozen=True)
 class Turbulence:
     """Horizontal turbulent diffusion of momentum (depth-averaged eddy viscosity).
 
@@ -140,19 +167,42 @@ class Turbulence:
 
     - ``parabolic``: nu_t = C_t u_* h + nu_0, where u_* = sqrt(g) n |u| / (k_n h^(1/6)) is
       the bed friction velocity (m/s) (the SRH-2D parabolic model, C_t = 0.7 by default);
-    - ``constant``: nu_t = ``nu_constant`` + nu_0.
+    - ``constant``: nu_t = ``nu_constant`` + nu_0;
+    - ``mixing_length``: the parabolic model plus a shear-generated part,
+      nu_t = C_t u_* h + (C_m h)^2 |S| + nu_0, with |S| = sqrt(2 S_ij S_ij) (1/s) the
+      magnitude of the depth-averaged strain rate and C_m h the mixing length (m);
+    - ``k_epsilon``: the depth-averaged k-epsilon model (Rastogi & Rodi 1978),
+      nu_t = c_mu k^2 / epsilon + nu_0, with K = h k and E = h epsilon transported as state
+      rows 3 and 4 (``physics.k_epsilon``).
 
     Attributes:
-        mode: ``none`` (no turbulent diffusion, default), ``parabolic`` or ``constant``.
-        coefficient: C_t of the parabolic model (-); differentiable as ``theta["eddy_Ct"]``.
+        mode: ``none`` (no turbulent diffusion, default), ``parabolic``, ``constant``,
+            ``mixing_length`` or ``k_epsilon``.
+        coefficient: C_t of the parabolic part (-); differentiable as ``theta["eddy_Ct"]``.
         nu0: background (molecular) viscosity nu_0 (m^2/s).
         nu_constant: eddy viscosity of the ``constant`` model (m^2/s).
+        mixing_coefficient: C_m of the ``mixing_length`` model (-), mixing length / depth;
+            differentiable as ``theta["eddy_Cm"]``.
+        c_mu, c_1, c_2, sigma_k, sigma_e: constants of the k-epsilon model (-).
+        k_min: floor of k (m^2/s^2) inside the k-epsilon formulas.
+        eps_min: floor of epsilon (m^2/s^3) inside the k-epsilon formulas.
+        initial_speed: speed (m/s) below which the initial k and epsilon are taken from
+            the equilibrium at this speed (a still initial state has no turbulence).
     """
 
     mode: str = "none"
     coefficient: float = 0.7
     nu0: float = 1.0e-6
     nu_constant: float = 0.0
+    mixing_coefficient: float = 0.0
+    c_mu: float = 0.09
+    c_1: float = 1.44
+    c_2: float = 1.92
+    sigma_k: float = 1.0
+    sigma_e: float = 1.3
+    k_min: float = 1.0e-10
+    eps_min: float = 1.0e-12
+    initial_speed: float = 0.1
 
 
 @dataclass(frozen=True)
@@ -187,6 +237,29 @@ class WallFriction:
     E: float = 9.8
     yplus_lam: float = 11.53
     iterations: int = 12
+
+
+@dataclass(frozen=True)
+class Dispersion:
+    """Dispersive momentum flux from sub-cell velocity variations (momentum coefficient).
+
+    Averaging the momentum flux over the depth and over the plan area of a cell gives
+    <u_i u_j> = beta U_i U_j, with U the averaged velocity. Inside a stem patch the pore
+    jets and stem wakes within each cell make beta > 1 (about 1.3 in a dense array with
+    one stem per cell). The 2D fluxes use beta = 1, so the model adds the missing part
+
+        - div[(beta - 1) h U U]      (m^2/s^2, momentum rows)
+
+    (see ``physics.dispersion``).
+
+    Attributes:
+        mode: ``none`` (beta = 1 everywhere, default) or ``zone`` (beta per material).
+        beta_zone: momentum coefficient beta (-) per material ID; differentiable as
+            ``theta["disp_beta"]``.
+    """
+
+    mode: str = "none"
+    beta_zone: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, eq=False)
@@ -284,8 +357,10 @@ class SWEModel:
     Q_times: Array | None = None       # time grid (s) when Q is a time series
     WSE_times: Array | None = None     # time grid (s) when WSE is a time series
     vegetation: Vegetation = field(default_factory=Vegetation)  # stem drag; none by default
+    porous: Porous = field(default_factory=Porous)  # Darcy-Forchheimer drag; none by default
     turbulence: Turbulence = field(default_factory=Turbulence)  # eddy viscosity; none by default
     wall_friction: WallFriction = field(default_factory=WallFriction)  # free-slip by default
+    dispersion: Dispersion = field(default_factory=Dispersion)  # beta = 1 by default
 
     def __hash__(self) -> int:
         """Identity hash, so that a model can be a static argument of ``jax.jit``.
@@ -332,6 +407,18 @@ def _boundary_values(values: dict, ids: tuple[int, ...]) -> tuple[np.ndarray, np
         rows.append(row)
 
     return np.stack(rows), grid
+
+
+def n_state(m: SWEModel) -> int:
+    """Number of state rows: 3 ([xi, q_x, q_y]) or 5 with k-epsilon ([..., h k, h eps]).
+
+    Args:
+        m: the model.
+
+    Returns:
+        3 or 5.
+    """
+    return 5 if m.turbulence.mode == "k_epsilon" else 3
 
 
 def build_model(mesh: Mesh, zb_cells: np.ndarray, wstill: np.ndarray, mat_id: np.ndarray,

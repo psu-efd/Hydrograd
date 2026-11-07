@@ -1,0 +1,111 @@
+{
+  "case": "Savannah River, Hydrograd.jl example forward_simulation/Savannah_River",
+  "reference": "SRH-2D steady solution stored in forward_simulation_initial_condition.json (SRH-2D parabolic eddy viscosity C_t = 0.7)",
+  "scheme": "hr_hllc, MUSCL (Venkatakrishnan) unless spatial_order 1, SteadyNewton()",
+  "initial_guess": "SRH-2D steady state",
+  "wet_depth_threshold_m": 0.01,
+  "machine": {
+    "cpu_model": "Intel(R) Xeon(R) Gold 6342 CPU @ 2.80GHz",
+    "cores_available": 8,
+    "slurm_job_id": "56200220",
+    "slurm_cpus_on_node": "8",
+    "host": "p-sc-2179",
+    "python": "3.12.15"
+  },
+  "figure_setting": "parabolic",
+  "settings": {
+    "default": {
+      "turbulence": null,
+      "spatial_order": 2,
+      "newton_iterations": 7,
+      "final_max_abs_residual": 1.1479989103072183e-13,
+      "solve_time_first_call_incl_compile_s": 4.1301466496661305,
+      "solve_time_warm_median_s": 1.3242019582539797,
+      "solve_time_warm_all_s": [
+        1.3312053233385086,
+        1.3242019582539797,
+        1.3062893487513065,
+        1.3419947372749448,
+        1.314601106569171
+      ],
+      "n_wet_cells": 1306,
+      "wse_rms_difference_m": 0.006258961955720608,
+      "wse_max_abs_difference_m": 0.022319363829645056,
+      "wse_mean_difference_m": -0.005046212988788002,
+      "speed_rms_difference_m_s": 0.05276238447747674,
+      "speed_max_abs_difference_m_s": 0.21494881141809485,
+      "speed_mean_difference_m_s": -0.004300745480322323,
+      "srh2d_speed_range_m_s": [
+        0.03181327643440139,
+        1.1284366743253835
+      ],
+      "srh2d_wse_range_m": [
+        29.288801193237305,
+        29.504741668701172
+      ]
+    },
+    "parabolic": {
+      "turbulence": {
+        "model": "parabolic",
+        "coefficient": 0.7
+      },
+      "spatial_order": 2,
+      "newton_iterations": 7,
+      "final_max_abs_residual": 8.274242572960594e-14,
+      "solve_time_first_call_incl_compile_s": 4.133319866843522,
+      "solve_time_warm_median_s": 1.311976001597941,
+      "solve_time_warm_all_s": [
+        1.3172231884673238,
+        1.3029782567173243,
+        1.3086372055113316,
+        1.311976001597941,
+        1.330670790746808
+      ],
+      "n_wet_cells": 1306,
+      "wse_rms_difference_m": 0.004661575311518272,
+      "wse_max_abs_difference_m": 0.020268069405450007,
+      "wse_mean_difference_m": -0.0032175297096758886,
+      "speed_rms_difference_m_s": 0.03717772310220949,
+      "speed_max_abs_difference_m_s": 0.19348901645606986,
+      "speed_mean_difference_m_s": -0.0018285133111796152,
+      "srh2d_speed_range_m_s": [
+        0.03181327643440139,
+        1.1284366743253835
+      ],
+      "srh2d_wse_range_m": [
+        29.288801193237305,
+        29.504741668701172
+      ]
+    },
+    "default_order1": {
+      "turbulence": null,
+      "spatial_order": 1,
+      "newton_iterations": 8,
+      "final_max_abs_residual": 2.99727081734081e-14,
+      "solve_time_first_call_incl_compile_s": 1.6156220473349094,
+      "solve_time_warm_median_s": 0.1183848874643445,
+      "solve_time_warm_all_s": [
+        0.1183848874643445,
+        0.11887629702687263,
+        0.12019891664385796,
+        0.11788443475961685,
+        0.11573518719524145
+      ],
+      "n_wet_cells": 1306,
+      "wse_rms_difference_m": 0.02746379024980625,
+      "wse_max_abs_difference_m": 0.05405019502394737,
+      "wse_mean_difference_m": 0.022249299595591455,
+      "speed_rms_difference_m_s": 0.05412481353224342,
+      "speed_max_abs_difference_m_s": 0.31604692635928744,
+      "speed_mean_difference_m_s": -0.00255494132314619,
+      "srh2d_speed_range_m_s": [
+        0.03181327643440139,
+        1.1284366743253835
+      ],
+      "srh2d_wse_range_m": [
+        29.288801193237305,
+        29.504741668701172
+      ]
+    }
+  }
+}

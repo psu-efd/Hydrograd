@@ -24,3 +24,6 @@ settings.json
 *.key
 # 3D CFD cases (OpenFOAM), kept local; see plan/cfd_vegetation_plan.md
 cfd/
+
+# Development notes (kept locally, not published)
+plan/
