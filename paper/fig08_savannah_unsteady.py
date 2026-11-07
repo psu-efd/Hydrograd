@@ -126,7 +126,7 @@ def plot_mesh_zones(ax: plt.Axes, data: np.lib.npyio.NpzFile) -> None:
                             labelspacing=0.2, borderaxespad=0.3)
     ax.add_artist(zone_legend)
     gauge_handles = [
-        Line2D([], [], marker="^", ls="none", mfc="none", mec="k", ms=6, label="6 gauges (bins)"),
+        Line2D([], [], marker="^", ls="none", mfc="none", mec="k", ms=6, label="6 gauges (along channel)"),
         Line2D([], [], marker="o", ls="none", mfc="tab:red", mec="k", ms=4,
                label="10 gauges (2 per zone)"),
     ]
@@ -212,7 +212,7 @@ def plot_singular_values(ax: plt.Axes, ident: dict, n_obs: dict) -> dict:
         Scaled singular values (mm per unit log n) per layout.
     """
     scaled = {}
-    styles = {"bins": (MODEL_2, "^", "6 gauges (bins)"),
+    styles = {"bins": (MODEL_2, "^", "6 gauges (along channel)"),
               "zones": (MODEL, "o", "10 gauges (2 per zone)")}
     k = np.arange(1, 6)
     for layout, (style, marker, label) in styles.items():
