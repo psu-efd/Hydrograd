@@ -23,7 +23,7 @@ uv pip install -e ".[dev,cuda]"       # + JAX for CUDA 12 GPUs
 uv pip install -e ".[pardiso]"        # optional: multithreaded sparse LU (faster steady and implicit solves)
 ```
 
-Plain `pip install` works the same way. On Penn State's Roar Collab cluster, `source hpc/roar/env.sh` activates the prepared environment; the job scripts in [`hpc/roar/`](hpc/roar/) show how the runs are submitted.
+Plain `pip install` works the same way. Heavy runs (large meshes, GPU runs, the paper's performance tables) are meant for a cluster or a workstation with an NVIDIA GPU; the package itself has no cluster-specific code.
 
 ## Run a case
 
