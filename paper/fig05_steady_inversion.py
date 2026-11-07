@@ -235,7 +235,7 @@ def plot(runs: dict[str, dict[str, Any]], results: dict[str, Any]) -> Path:
     # Hydrograd.jl example configuration (300 Adam iterations, transient, first order).
     julia = inversions["julia300"]
     ax_time.bar(2.0, julia["wall_time_total_s"], width=width * 0.95, color="0.6",
-                label="transient, 300 Adam (Julia example)")
+                label=r"transient, 300 Adam (\textit{Hydrograd} v1.0)")
     ax_time.text(2.0, julia["wall_time_total_s"] * 1.12, rf"{julia['wall_time_total_s']:.0f}",
                  ha="center", va="bottom", fontsize=7)
 
