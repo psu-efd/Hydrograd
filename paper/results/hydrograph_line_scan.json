@@ -1,0 +1,221 @@
+{
+ "alphas": [
+  0.0,
+  0.1,
+  0.2,
+  0.3,
+  0.4,
+  0.5,
+  0.6,
+  0.7,
+  0.8,
+  0.9,
+  1.0,
+  1.1,
+  1.2
+ ],
+ "q_inverted_m3_per_s": [
+  36.37159508339626,
+  105.82995417905323,
+  307.6011206303966,
+  356.74999760602157,
+  313.3585385640751,
+  233.81269681512566,
+  158.13581961686572,
+  117.55142558479317,
+  63.081910571139424
+ ],
+ "q_true_knots_m3_per_s": [
+  40.0,
+  124.83731076550005,
+  289.6792197992011,
+  350.0,
+  310.32326343857096,
+  234.23119353402748,
+  163.47192955230258,
+  112.12969937181872,
+  79.60914621092019
+ ],
+ "scans": {
+  "dt60": {
+   "dt_s": 60.0,
+   "points": [
+    {
+     "alpha": 0.0,
+     "loss_m2": 0.0006630475182579496,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.1,
+     "loss_m2": 0.0006519937496782913,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.2,
+     "loss_m2": 0.0006739323402904587,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.3,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 7
+    },
+    {
+     "alpha": 0.4,
+     "loss_m2": 0.0008179388052178401,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.5,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 1
+    },
+    {
+     "alpha": 0.6,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 1
+    },
+    {
+     "alpha": 0.7,
+     "loss_m2": 0.0012745421824441425,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.8,
+     "loss_m2": 0.0014889643917107625,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.9,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 2
+    },
+    {
+     "alpha": 1.0,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 1
+    },
+    {
+     "alpha": 1.1,
+     "loss_m2": 0.002317686992032108,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 1.2,
+     "loss_m2": 0.002654213687757788,
+     "finite": true,
+     "first_non_finite_frame": -1
+    }
+   ],
+   "n_failed": 5
+  },
+  "dt30": {
+   "dt_s": 30.0,
+   "points": [
+    {
+     "alpha": 0.0,
+     "loss_m2": 0.000660899381321816,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.1,
+     "loss_m2": 0.000632633626851267,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.2,
+     "loss_m2": 0.0006375090848057902,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.3,
+     "loss_m2": 0.0006754822988922823,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.4,
+     "loss_m2": 0.0007461631440239666,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.5,
+     "loss_m2": 0.0008497801866815707,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.6,
+     "loss_m2": 0.0009874128625883085,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.7,
+     "loss_m2": null,
+     "finite": false,
+     "first_non_finite_frame": 8
+    },
+    {
+     "alpha": 0.8,
+     "loss_m2": 0.001362775868985754,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 0.9,
+     "loss_m2": 0.0015959673225798593,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 1.0,
+     "loss_m2": 0.0018607818593143611,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 1.1,
+     "loss_m2": 0.0021567474320172498,
+     "finite": true,
+     "first_non_finite_frame": -1
+    },
+    {
+     "alpha": 1.2,
+     "loss_m2": 0.002482063095963435,
+     "finite": true,
+     "first_non_finite_frame": -1
+    }
+   ],
+   "n_failed": 1
+  }
+ },
+ "gradient_at_inverted_knots_dt60": [
+  3.536432932816346e-05,
+  -3.3379355398100296e-06,
+  -7.232896713196159e-07,
+  1.2286561888398627e-07,
+  -9.043403015931307e-07,
+  -2.6777681208591946e-06,
+  -4.0981415115288985e-06,
+  7.116642912370339e-07,
+  -1.9845334661992868e-05
+ ],
+ "max_abs_gradient_at_inverted_knots_dt60": 3.536432932816346e-05
+}

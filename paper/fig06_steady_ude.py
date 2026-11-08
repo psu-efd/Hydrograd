@@ -479,6 +479,44 @@ def run_all(n_iter: int) -> None:
     RESULTS_FILE.write_text(json.dumps(summary, indent=2))
 
 
+def _draw_mlp_sketch(ax: plt.Axes) -> None:
+    """Draw a small sketch of the closure network n = N(h) in the top right of panel (b).
+
+    The sketch shows the layout used in this case: one input neuron (h), two hidden
+    layers of three neurons each (tanh), and one output neuron (n). Neurons are circles
+    and weights are thin grey lines; the inset has no axes.
+
+    Args:
+        ax: the axes of panel (b); the sketch is drawn in an inset in axes fractions.
+    """
+    inset = ax.inset_axes([0.60, 0.36, 0.37, 0.50])
+    inset.set_axis_off()
+    inset.set_xlim(-0.55, 2.35)
+    inset.set_ylim(-0.95, 1.25)
+
+    # Neuron positions, one column per layer: input, hidden, hidden, output.
+    layer_sizes = [1, 3, 3, 1]
+    columns = []
+    for x, size in enumerate(layer_sizes):
+        ys = np.linspace(-0.55, 0.55, size) if size > 1 else np.array([0.0])
+        columns.append([(0.6 * float(x), float(y)) for y in ys])
+
+    # Weights: every neuron of one layer connects to every neuron of the next.
+    for left, right in zip(columns[:-1], columns[1:]):
+        for (x0, y0) in left:
+            for (x1, y1) in right:
+                inset.plot([x0, x1], [y0, y1], color="0.6", linewidth=0.5, zorder=1)
+
+    # Neurons, with the input and output ones labelled.
+    for column in columns:
+        for (x, y) in column:
+            inset.plot(x, y, marker="o", markersize=5.5, markerfacecolor="white",
+                       markeredgecolor="0.2", markeredgewidth=0.7, zorder=2)
+    inset.text(-0.17, 0.0, r"$h$", ha="right", va="center", fontsize=10)
+    inset.text(1.97, 0.0, r"$n$", ha="left", va="center", fontsize=10)
+    inset.text(0.9, 0.85, r"$n = \mathcal{N}(h)$", ha="center", va="bottom", fontsize=10)
+
+
 def plot() -> None:
     """Draw Figure 6 from ``curves.npz`` and ``steady_ude.json``."""
     c = np.load(CURVES_FILE)
@@ -511,6 +549,7 @@ def plot() -> None:
     ax.set_xlabel(r"$h$ (m)")
     ax.set_ylabel(r"$n$ (s\,m$^{-1/3}$)")
     ax.legend(loc="center left", bbox_to_anchor=(0.0, 0.42))
+    _draw_mlp_sketch(ax)
     panel_label(ax, "(b)")
 
     # ------------------------------------------------------------------
