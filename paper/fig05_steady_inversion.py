@@ -47,8 +47,9 @@ from savannah_common import DATA_DIR, write_results
 INVERSION_RUNS = ("steady", "transient", "steady_o1", "transient_o1", "julia300")
 RUNS = (*INVERSION_RUNS, "gradcheck")
 
-# Zone colours, the same as the material zones in Figure 2 (Okabe-Ito palette).
-ZONE_COLOURS = ["#56B4E9", "#009E73", "#F0E442", "#CC79A7", "#0072B2"]
+# Zone colours, the same as the material zones in Figure 2 (Okabe-Ito palette), except
+# zone 3, drawn in black instead of yellow for legibility on white.
+ZONE_COLOURS = ["#56B4E9", "#009E73", "black", "#CC79A7", "#0072B2"]
 ZONE_MARKERS = ["o", "s", "^", "D", "v"]
 
 
