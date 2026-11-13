@@ -149,9 +149,12 @@ def test_implicit_volume_balance_closed_channel(tmp_path) -> None:
 
 
 def test_implicit_ift_gradient_matches_finite_differences(tmp_path) -> None:
-    """d(sum w h)/dQ_knot via the implicit IFT adjoint vs a central FD (step 0.05 m^3/s).
+    """d(sum w h)/dQ_knot via the implicit IFT adjoint vs a central FD (step 0.01 m^3/s).
 
     The loss is a random weighted sum of the final depths; the relative tolerance is 2e-3.
+    The step stays small because the loss has kinks where a floodplain inlet face starts
+    to carry discharge (its share grows from zero as h_f^(5/3)); a step of 0.05 m^3/s
+    straddles one.
     """
     case = _case(tmp_path, t_end=600.0)
     model = case.model
@@ -169,10 +172,10 @@ def test_implicit_ift_gradient_matches_finite_differences(tmp_path) -> None:
     q0 = jnp.asarray(model.Q)
     gradient = np.asarray(jax.jit(jax.grad(loss))(q0))
 
-    # Central finite difference on hydrograph entry [0, 1], step 0.05
+    # Central finite difference on hydrograph entry [0, 1], step 0.01
     loss_jit = jax.jit(loss)
-    perturbation = jnp.zeros_like(q0).at[0, 1].set(0.05)
-    fd = (float(loss_jit(q0 + perturbation)) - float(loss_jit(q0 - perturbation))) / 0.1
+    perturbation = jnp.zeros_like(q0).at[0, 1].set(0.01)
+    fd = (float(loss_jit(q0 + perturbation)) - float(loss_jit(q0 - perturbation))) / 0.02
     assert abs(gradient[0, 1] - fd) <= 2e-3 * abs(fd)
 
 

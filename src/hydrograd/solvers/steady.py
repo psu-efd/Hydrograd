@@ -24,7 +24,7 @@ loss.
 
 Inlet coupling: Woodbury identity
 ---------------------------------
-The Jacobian is J = J_local + A C^T (sparse plus rank n_in, see ``solvers.jacobian``).
+The Jacobian is J = J_local + A C^T (sparse plus rank 2 n_in, see ``solvers.jacobian``).
 For a sparse M and thin dense U_w, V_w,
 
     (M + U_w V_w^T)^{-1} b = x - M^{-1} U_w (I + V_w^T M^{-1} U_w)^{-1} V_w^T x,
@@ -232,8 +232,8 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, rhs
     Args:
         m: the model (selects the cached Jacobian pattern).
         comp: compressed JVPs of J_local, shape [3 n_colors, 3, n].
-        A: dR/dK, shape [3n, n_in].
-        C: (dK/dU)^T, shape [3n, n_in].
+        A: dR/dK, shape [3n, 2 n_in].
+        C: (dK/dU)^T, shape [3n, 2 n_in].
         rhs_vec: right-hand side b, shape [3, n] (or any shape with 3n rows when flattened
             row-major, e.g. [3n, k]).
         shift: diagonal shift 1/dtau (1/s); ignored when ``transpose`` is True.

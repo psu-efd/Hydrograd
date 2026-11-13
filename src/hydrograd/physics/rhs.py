@@ -61,6 +61,7 @@ __all__ = [
     "clipped_state",
     "friction",
     "inlet_conveyance",
+    "inlet_coupling",
     "manning_n_cells",
     "rhs",
     "rhs_julia",
@@ -267,49 +268,95 @@ def friction(
     return c * qx, c * qy
 
 
-def _inlet_face_terms(m: SWEModel, h: Array, n: Array) -> tuple[Array, Array, Array]:
-    """Per boundary face: (wet flag, conveyance K_f, velocity shape) for inlet-Q faces.
+def _inlet_wse(m: SWEModel, h: Array, zb: Array) -> Array:
+    """Water-surface elevation of each inlet-Q boundary, shape [max(n_inlets, 1)] (m).
 
-    Default split (``inlet_split = "conveyance"``): K_f = L h^(5/3) / n and the velocity
-    shape is h^(2/3) / n. Hydrograd.jl (``"julia"``): K_f = L^(5/3) h / n, shape L^(2/3)/n.
+    Mean of the cell WSE h + zb over the faces of each inlet, weighted by L h (0 for an
+    all-dry inlet). The depth weight lets a cell that wets or dries enter or leave the mean
+    continuously, which keeps the residual smooth for Newton.
+    For a level water surface it equals that surface.
+
+    Args:
+        m: the model (boundary faces).
+        h: cell water depth (m), shape [n_cells].
+        zb: cell bed elevation (m), shape [n_cells].
+
+    Returns:
+        Inlet WSE (m), shape [max(n_inlets, 1)].
+    """
+    n_in = max(m.n_inlets, 1)
+    hc = h[m.fb_c]
+    weight = jnp.where(m.fb_kind == KIND_INLET, m.fb_L * jnp.maximum(hc, 0.0), 0.0)
+    total = jax.ops.segment_sum(weight, m.fb_inlet, n_in)
+    wse_sum = jax.ops.segment_sum(weight * (hc + zb[m.fb_c]), m.fb_inlet, n_in)
+    return jnp.where(total > 0.0, wse_sum / jnp.where(total > 0.0, total, 1.0), 0.0)
+
+
+def _inlet_face_terms(
+    m: SWEModel, h: Array, n: Array, zb: Array, wse: Array | None = None,
+) -> tuple[Array, Array, Array, Array]:
+    """Per boundary face: (wet flag, K_f, discharge shape, depth) for inlet-Q faces.
+
+    Default split (``inlet_split = "conveyance"``, as in SRH-2D): the water surface is level
+    across each inlet at its mean WSE, the face depth is h_f = WSE - zb_cell, and
+
+        K_f = L h_f^(5/3) / n,   unit discharge q_f = Q/K * h_f^(5/3) / n.
+
+    The shares therefore follow the bed and roughness, not the instantaneous depth of each
+    inlet cell. (A split on the cell depth feeds more inflow to cells that rise, which
+    amplifies transverse waves at the inlet on fine meshes.) A face carries discharge where
+    h_f > 0, also next to a dry cell, and its share grows from zero as h_f^(5/3), so a
+    rising inlet WSE floods its banks smoothly; the inflow velocity q_f / h_f =
+    Q/K h_f^(2/3)/n stays bounded.
+    Hydrograd.jl (``"julia"``): K_f = L^(5/3) h / n and q_f = Q/K * h L^(2/3) / n, with h
+    the cell depth.
 
     Args:
         m: the model (boundary faces and ``inlet_split``).
         h: cell water depth (m), shape [n_cells].
         n: cell Manning's n (s/m^(1/3)), shape [n_cells].
+        zb: cell bed elevation (m), shape [n_cells].
+        wse: inlet WSEs (m), shape [max(n_inlets, 1)]; None computes them from h and zb.
 
     Returns:
-        (wet, k_face, v_shape), each of shape [n_boundary_faces]: 1.0 on wet inlet faces
-        and 0.0 elsewhere; face conveyance K_f (zero on non-inlet and dry faces); and the
-        velocity shape factor, so that the face normal velocity is Q/K * v_shape.
+        (wet, k_face, q_shape, h_face), each of shape [n_boundary_faces]: 1.0 on wet inlet
+        faces and 0.0 elsewhere; face conveyance K_f (zero on non-inlet and dry faces); the
+        discharge shape factor, so that the face unit discharge is Q/K * q_shape (m^2/s);
+        and the inflow depth (m): h_f on wet inlet faces, the cell depth elsewhere.
     """
     face_length = m.fb_L
     hc = h[m.fb_c]
     nc = n[m.fb_c]
-
-    # Wet inlet faces carry discharge; dry ones and other kinds do not.
     is_in = m.fb_kind == KIND_INLET
-    wet = jnp.where(is_in & (hc > m.h_small), 1.0, 0.0)
 
-    # Hydrograd.jl's split (L and h swapped).
+    # Hydrograd.jl's split (L and h swapped), on the cell depth.
     if m.inlet_split == "julia":
+        wet = jnp.where(is_in & (hc > m.h_small), 1.0, 0.0)
         k_face = face_length ** (5.0 / 3.0) * hc / nc * wet
-        v_shape = face_length ** (2.0 / 3.0) / nc
-        return wet, k_face, v_shape
+        q_shape = hc * face_length ** (2.0 / 3.0) / nc
+        return wet, k_face, q_shape, hc
 
-    # Conveyance split. Wet faces have h > h_small; the floor avoids
-    # d(h^(2/3))/dh = inf at h = 0.
-    hw = jnp.maximum(hc, m.h_small)
-    k_face = face_length * hw ** (5.0 / 3.0) / nc * wet
-    v_shape = hw ** (2.0 / 3.0) / nc
-    return wet, k_face, v_shape
+    # Conveyance split on a level inlet water surface: h_f^(5/3) is continuous with a zero
+    # derivative at h_f = 0, so faces join and leave the split smoothly. The guard keeps
+    # the derivative of x^(5/3) finite (no 0 * inf) where h_f <= 0.
+    if wse is None:
+        wse = _inlet_wse(m, h, zb)
+    hf = wse[m.fb_inlet] - zb[m.fb_c]
+    wet = jnp.where(is_in & (hf > 0.0), 1.0, 0.0)
+    hpos = jnp.where(wet > 0.0, hf, 1.0)
+    q_shape = jnp.where(wet > 0.0, hpos ** (5.0 / 3.0), 0.0) / nc
+    k_face = face_length * q_shape
+    # Inflow depth: h_f (floored at h_small for the momentum flux q^2/h) on wet faces.
+    h_face = jnp.where(wet > 0.0, jnp.maximum(hf, m.h_small), hc)
+    return wet, k_face, q_shape, h_face
 
 
-def inlet_conveyance(m: SWEModel, theta: Theta, U: Array) -> Array:
-    """Total conveyance K of each inlet-Q boundary, shape [max(n_inlets, 1)].
+def inlet_coupling(m: SWEModel, theta: Theta, U: Array) -> Array:
+    """Inlet quantities that couple all cells of an inlet: [K, WSE], shape [2 max(n_inlets, 1)].
 
-    All inlet cells interact only through K, so dR/dU = J_local + (dR/dK)(dK/dU):
-    the Jacobian tools treat that coupling as a low-rank term.
+    All inlet cells interact only through these, so dR/dU = J_local + (dR/dK)(dK/dU):
+    the Jacobian tools treat that coupling as a low-rank term. The first half is the total
+    conveyance K of each inlet, the second its mean WSE (see :func:`_inlet_face_terms`).
 
     Args:
         m: the model.
@@ -317,9 +364,11 @@ def inlet_conveyance(m: SWEModel, theta: Theta, U: Array) -> Array:
         U: state [xi, q_x, q_y], shape [3, n_cells].
 
     Returns:
-        Conveyance K = sum of K_f over the wet faces of each inlet (units of L h^(5/3)/n,
-        m^3/s in SI), shape [max(n_inlets, 1)].
+        [K_1 .. K_n, WSE_1 .. WSE_n]: conveyances (units of L h^(5/3)/n, m^3/s in SI) and
+        inlet WSEs (m), shape [2 max(n_inlets, 1)].
     """
+    zb = theta["zb"] if "zb" in theta else m.zb
+
     # Cell depth and Manning's n, computed as in the selected scheme.
     if m.scheme == "hr_hllc":
         from hydrograd.physics.rhs_hr import _cell_state
@@ -330,15 +379,33 @@ def inlet_conveyance(m: SWEModel, theta: Theta, U: Array) -> Array:
         n = manning_n_cells(m, theta, h, qx, qy)
 
     # Sum the face conveyances per inlet boundary.
-    _, k_face, _ = _inlet_face_terms(m, h, n)
-    return jax.ops.segment_sum(k_face, m.fb_inlet, max(m.n_inlets, 1))
+    wse = _inlet_wse(m, h, zb)
+    _, k_face, _, _ = _inlet_face_terms(m, h, n, zb, wse)
+    K = jax.ops.segment_sum(k_face, m.fb_inlet, max(m.n_inlets, 1))
+    return jnp.concatenate([K, wse])
+
+
+def inlet_conveyance(m: SWEModel, theta: Theta, U: Array) -> Array:
+    """Total conveyance K of each inlet-Q boundary, shape [max(n_inlets, 1)].
+
+    Args:
+        m: the model.
+        theta: differentiable parameters.
+        U: state [xi, q_x, q_y], shape [3, n_cells].
+
+    Returns:
+        Conveyance K = sum of K_f over the wet faces of each inlet (units of L h^(5/3)/n,
+        m^3/s in SI), shape [max(n_inlets, 1)].
+    """
+    return inlet_coupling(m, theta, U)[: max(m.n_inlets, 1)]
 
 
 def _ghosts(m: SWEModel, theta: Theta, zb: Array, h: Array, qx: Array, qy: Array,
             n: Array, K: Array | None = None) -> tuple[Array, Array, Array]:
     """Ghost (h, q_x, q_y) on boundary faces (``process_all_boundaries_2d``).
 
-    - Inlet-Q: cell depth, discharge q = -h v_n n with v_n from the conveyance split.
+    - Inlet-Q: inflow depth (h_f on a level inlet WSE; the cell depth with the "julia"
+      split), discharge q = -q_f n with q_f from the conveyance split.
     - Exit-H: depth from the prescribed WSE, max(h_small, WSE - zb); cell discharge.
     - Wall: cell depth, reversed discharge -q.
     - Symmetry: cell depth, discharge with its normal component reflected.
@@ -350,7 +417,8 @@ def _ghosts(m: SWEModel, theta: Theta, zb: Array, h: Array, qx: Array, qy: Array
         h: cell water depth (m), shape [n_cells].
         qx, qy: cell unit discharges (m^2/s), shape [n_cells].
         n: cell Manning's n (s/m^(1/3)), shape [n_cells].
-        K: inlet conveyances, shape [max(n_inlets, 1)]; None computes them from h.
+        K: inlet coupling [K, WSE] (see :func:`inlet_coupling`), shape
+            [2 max(n_inlets, 1)]; None computes it from h.
 
     Returns:
         (h_ghost, qx_ghost, qy_ghost), each of shape [n_boundary_faces]: depth (m) and
@@ -372,24 +440,26 @@ def _ghosts(m: SWEModel, theta: Theta, zb: Array, h: Array, qx: Array, qy: Array
     is_wall = kind == KIND_WALL
     is_sym = kind == KIND_SYMM
 
-    # Inlet-Q: split Q over wet faces by Manning conveyance K_f = L h^(5/3) / n, so that the
-    # face velocity is v_n = Q/K * h^(2/3)/n and sum_f h v_n L = Q. Hydrograd.jl swaps L and h
-    # (K_f = L^(5/3) h / n, v_n = Q/K * L^(2/3)/n); inlet_split = "julia" reproduces that.
+    # Inlet-Q: split Q over wet faces by Manning conveyance K_f = L h_f^(5/3) / n on a level
+    # inlet water surface, so that the face unit discharge is q_f = Q/K * h_f^(5/3)/n and
+    # sum_f q_f L = Q. Hydrograd.jl swaps L and h (K_f = L^(5/3) h / n); inlet_split =
+    # "julia" reproduces that.
     Q = theta.get("Q", m.Q)
-    wet, k_face, v_shape = _inlet_face_terms(m, h, n)
-    if K is None:
-        K = jax.ops.segment_sum(k_face, m.fb_inlet, max(m.n_inlets, 1))
-    K_f = K[m.fb_inlet]
+    n_in = max(m.n_inlets, 1)
+    wse = None if K is None else K[n_in:]
+    wet, k_face, q_shape, h_face = _inlet_face_terms(m, h, n, zb, wse)
+    K_tot = jax.ops.segment_sum(k_face, m.fb_inlet, n_in) if K is None else K[:n_in]
+    K_f = K_tot[m.fb_inlet]
 
     # Julia asserts K > 0; here an all-dry inlet carries no discharge.
     ok = is_in & (K_f > 0.0)
     Q_face = Q[m.fb_inlet] if m.n_inlets else 0.0
     Q_over_K = jnp.where(ok, Q_face / jnp.where(ok, K_f, 1.0), 0.0)
-    vn = Q_over_K * v_shape
+    q_face = Q_over_K * q_shape * wet
 
     # Inflow discharge points against the outward normal.
-    qx_in = -hc * vn * nx * wet
-    qy_in = -hc * vn * ny * wet
+    qx_in = -q_face * nx
+    qy_in = -q_face * ny
 
     # Exit-H: depth from the prescribed WSE.
     WSE = theta.get("WSE", m.WSE)
@@ -402,7 +472,7 @@ def _ghosts(m: SWEModel, theta: Theta, zb: Array, h: Array, qx: Array, qy: Array
     qy_sym = qyc - 2.0 * vdn * ny
 
     # Assemble the ghost states by boundary kind (other kinds copy the cell values).
-    hg = jnp.where(is_ex, h_ex, hc)
+    hg = jnp.where(is_ex, h_ex, jnp.where(is_in, h_face, hc))
     qxg = jnp.where(is_in, qx_in, jnp.where(is_wall, -qxc, jnp.where(is_sym, qx_sym, qxc)))
     qyg = jnp.where(is_in, qy_in, jnp.where(is_wall, -qyc, jnp.where(is_sym, qy_sym, qyc)))
 
@@ -466,7 +536,8 @@ def rhs(
         m: the model.
         theta: differentiable parameters.
         U: state [xi, q_x, q_y], shape [3, n_cells].
-        K: inlet conveyances, shape [max(n_inlets, 1)], or None to compute them from U.
+        K: inlet coupling [K, WSE] (see :func:`inlet_coupling`), or None to compute it
+            from U.
         t: time (s) for time-varying boundary values, or None (steady).
 
     Returns:
@@ -494,8 +565,8 @@ def rhs_julia(m: SWEModel, theta: Theta, U: Array, K: Array | None = None) -> Ar
         m: static model.
         theta: parameter overrides (``zb``, ``n_zone``, ``Q``, ``WSE``, ``nn``); may be empty.
         U: state [xi, q_x, q_y], shape [3, n_cells].
-        K: optional inlet conveyances to use instead of computing them from U
-            (Jacobian splitting; see :func:`inlet_conveyance`).
+        K: optional inlet coupling [K, WSE] to use instead of computing it from U
+            (Jacobian splitting; see :func:`inlet_coupling`).
 
     Returns:
         dU/dt, shape [3, n_cells] (units of U per second).

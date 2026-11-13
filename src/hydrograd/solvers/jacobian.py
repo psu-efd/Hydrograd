@@ -13,15 +13,17 @@ cell i is ``k * n_cells + i`` (the ordering of ``U.reshape(-1)``).
 Splitting off the inlet coupling
 --------------------------------
 For the first-order scheme the residual of cell i depends on U_i and on its face
-neighbours. Inlet-Q cells add one non-local dependence: the inlet discharge is split
-over the inlet faces in proportion to a conveyance, whose inlet total K sums over all
-cells of that inlet. The Jacobian is therefore written as
+neighbours. Inlet-Q cells add non-local dependences: the inlet discharge is split
+over the inlet faces in proportion to a conveyance on a level inlet water surface, so
+each face share depends on the inlet's mean WSE and total conveyance, both of which sum
+over all cells of that inlet. With K = [K_1 .. K_n, WSE_1 .. WSE_n]
+(``physics.rhs.inlet_coupling``) the Jacobian is written as
 
     dR/dU = J_local + A C^T,
 
     J_local = dR/dU with K held fixed                      (sparse)   [3N x 3N]
-    A       = dR/dK                                        (dense)    [3N x n_in]
-    C       = (dK/dU)^T                                    (dense)    [3N x n_in]
+    A       = dR/dK                                        (dense)    [3N x 2 n_in]
+    C       = (dK/dU)^T                                    (dense)    [3N x 2 n_in]
 
 with n_in the number of inlets. Linear solves with this low-rank-plus-sparse matrix use
 the Woodbury identity (see ``solvers.steady._woodbury_solve``).
@@ -264,34 +266,34 @@ def linearize(
     Returns:
         (comp, A, C):
         comp: compressed JVPs of R with K frozen, [3 n_colors, 3, n] (-> J_local);
-        A: dR/dK, [3 n, n_in];
-        C: dK/dU transposed, [3 n, n_in].
+        A: dR/dK, [3 n, 2 n_in];
+        C: dK/dU transposed, [3 n, 2 n_in].
     """
-    from hydrograd.physics.rhs import inlet_conveyance, rhs
+    from hydrograd.physics.rhs import inlet_coupling, rhs
 
     P = jacobian_pattern(m)
 
-    # Inlet conveyance totals at U, frozen (not differentiated) for J_local.
-    K0 = jax.lax.stop_gradient(inlet_conveyance(m, theta, U))
+    # Inlet coupling (conveyance totals and WSEs) at U, frozen (not differentiated) for J_local.
+    K0 = jax.lax.stop_gradient(inlet_coupling(m, theta, U))
 
     # J_local: JVPs of R with K held at K0.
     def residual_fixed_K(X: Array) -> Array:
-        """R(X) with the inlet conveyance frozen at K0, shape [3, n]."""
+        """R(X) with the inlet coupling frozen at K0, shape [3, n]."""
         return rhs(m, theta, X, K0, t)
 
     comp = P.compressed(residual_fixed_K, U)
 
     # A = dR/dK: forward mode, one column per inlet.
     def residual_of_K(K: Array) -> Array:
-        """Flat R(U) as a function of the inlet conveyances K, shape [3n]."""
+        """Flat R(U) as a function of the inlet coupling K, shape [3n]."""
         return rhs(m, theta, U, K, t).reshape(-1)
 
     A = jax.jacfwd(residual_of_K)(K0)
 
     # C = (dK/dU)^T: reverse mode, one row per inlet.
     def conveyance_of_U(X: Array) -> Array:
-        """Inlet conveyance totals K(X), shape [n_in]."""
-        return inlet_conveyance(m, theta, X)
+        """Inlet coupling K(X) = [conveyances, WSEs], shape [2 n_in]."""
+        return inlet_coupling(m, theta, X)
 
     C = jax.jacrev(conveyance_of_U)(U).reshape(K0.shape[0], -1).T
 
@@ -304,8 +306,8 @@ def full_jacobian(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray) -
     Args:
         m: the model.
         comp: compressed JVPs, shape [3 n_colors, 3, n].
-        A: dR/dK, shape [3n, n_in].
-        C: (dK/dU)^T, shape [3n, n_in].
+        A: dR/dK, shape [3n, 2 n_in].
+        C: (dK/dU)^T, shape [3n, 2 n_in].
 
     Returns:
         Dense Jacobian dR/dU, shape [3n, 3n].
