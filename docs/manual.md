@@ -126,6 +126,8 @@ Hydrograd v2.0 adds optional **top-level blocks**: `numerics`, `turbulence`, `wa
 | `BackwardEuler()`, `CrankNicolson()` | long, slowly varying unsteady events; fixed step `dt` | one adjoint linear solve per step (about 1.5 forward runs); reverse mode only |
 | `Tsit5()`, `Euler()`, `RK4()` | general adaptive or fixed-step integration (as in Hydrograd.jl) | reverse or forward mode; use a tight tolerance for gradients (the sensitivity, inversion and UDE modes use `rtol = 1e-7`) |
 
+Dry cells in steady gradients: a dry cell (h ≤ 0 with `hr_hllc`) has no effect on the residual, so `SteadyNewton()` gradients hold the dry set fixed (zero sensitivity in dry cells). The gradient is exact as long as a small parameter change wets or dries no cell; it does not see a wet/dry front move.
+
 Section 10 gives guidance on the choice.
 
 ### 5.3 Time series

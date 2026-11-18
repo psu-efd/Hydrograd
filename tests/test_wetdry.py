@@ -11,6 +11,9 @@ What is checked:
 - (slow) Gradient of a weighted depth sum with respect to a hydrograph knot while floodplain
   cells wet up, vs a central finite difference (relative 1e-3). The CFL step choice is not
   differentiated.
+- Steady IFT gradient (reverse mode and ``steady_jacobian``) with respect to Manning's n in
+  a channel with an emerged bank (dry cells held fixed): finite, and equal to a central
+  finite difference to 1e-6 (relative). Without the dry-cell rule J is singular (NaN).
 """
 
 from __future__ import annotations
@@ -26,6 +29,12 @@ from hydrograd.io.control import read_control
 from hydrograd.io.synthetic import write_channel_case
 from hydrograd.physics.rhs import rhs
 from hydrograd.solvers.ode import solve_swe
+from hydrograd.solvers.steady import (
+    NewtonSettings,
+    newton_solve,
+    steady_jacobian,
+    steady_state,
+)
 from hydrograd.validation.dambreak import dam_break
 
 T = 60.0  # dam-break end time (s)
@@ -191,3 +200,49 @@ def test_gradient_through_wetting_front_matches_finite_differences(tmp_path) -> 
     perturbation = jnp.zeros_like(q0).at[0, 1].set(0.1)
     fd = (float(loss(q0 + perturbation)) - float(loss(q0 - perturbation))) / 0.2
     assert abs(gradient[0, 1] - fd) <= 1e-3 * abs(fd)
+
+
+def test_steady_gradient_with_dry_bank_matches_finite_differences(tmp_path) -> None:
+    """Steady IFT gradient wrt zone-1 Manning's n with a dry bank strip vs central FD."""
+
+    def banked_bed(X, Y):
+        """Bed (m): slope 1e-3 plus a bank rising 3 m from y = 28 m to y = 40 m."""
+        return 1e-3 * (400 - X) + 3.0 * np.clip((Y - 28) / 12, 0, 1)
+
+    write_channel_case(
+        tmp_path, 40, 8, length=400.0, width=40.0, Q=20.0, wse_out=1.5, order=2,
+        zb_fn=banked_bed, ic_wse=lambda x, y: 1.5 + 0 * x,
+    )
+    case = setup_case(read_control(tmp_path / "run_control.json"))
+    model = case.model
+    newton = NewtonSettings(dtau0=1.0)
+
+    # The steady state has dry cells (the emerged bank) and converges
+    U, _, residual = newton_solve(model, {}, case.U0, newton)
+    h = np.asarray(U[0] + model.hstill)
+    assert float(residual) < 1e-10
+    assert (h <= 0.0).sum() > 0 and (h > 0.1).sum() > 0
+
+    # Scalar loss: random weighted sum of the steady state
+    weights = jnp.asarray(np.random.default_rng(0).normal(size=case.U0.shape))
+
+    def loss_fn(n_zone):
+        """Weighted sum of the steady state for zone Manning's n values n_zone."""
+        return jnp.sum(weights * steady_state(model, {"n_zone": n_zone}, case.U0, newton))
+
+    loss = jax.jit(loss_fn)
+    n_zone = jnp.asarray(model.n_zone)
+    perturbation = jnp.zeros_like(n_zone).at[1].set(1e-6)
+    fd = (float(loss(n_zone + perturbation)) - float(loss(n_zone - perturbation))) / 2e-6
+
+    # Reverse mode (adjoint)
+    gradient = np.asarray(jax.jit(jax.grad(loss))(n_zone))
+    assert np.all(np.isfinite(gradient))
+    assert abs(gradient[1] - fd) <= 1e-6 * abs(fd)
+
+    # Forward sensitivities dU*/dn (same dry-cell rule)
+    sensitivities = steady_jacobian(model, {"n_zone": n_zone}, U)
+    assert np.all(np.isfinite(sensitivities))
+    dry = np.broadcast_to(h <= 0.0, U.shape).reshape(-1)
+    assert np.all(sensitivities[dry] == 0.0)
+    assert abs(np.asarray(weights).reshape(-1) @ sensitivities[:, 1] - fd) <= 1e-6 * abs(fd)
