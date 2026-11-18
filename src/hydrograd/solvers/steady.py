@@ -373,15 +373,15 @@ def newton_solve(
 
     def cond(c):
         """Continue while not converged and below the iteration cap."""
-        _, it, rn, _, _ = c
+        _, it, rn, _, _, _ = c
         return (rn > s.tol) & (it < s.max_iter)
 
     def body(c):
         """One pseudo-transient Newton iteration.
 
-        Carry: (U, iteration, max|R(U)|, max|R(U0)|, safeguard factor f_k).
+        Carry: (U, iteration, max|R(U)|, max|R(U0)|, safeguard factor f_k, rejected steps).
         """
-        U, it, rn, r0, fac = c
+        U, it, rn, r0, fac, n_rej = c
 
         # 1. Residual and Jacobian at the current state.
         R = f(U)
@@ -407,14 +407,24 @@ def newton_solve(
         rn = jnp.where(ok, rn_new, rn)
         fac = jnp.where(ok, jnp.minimum(2.0 * fac, 1.0), fac * s.shrink)
 
-        return U, it + 1, rn, r0, fac
+        return U, it + 1, rn, r0, fac, n_rej + jnp.where(ok, 0, 1)
 
     # Initial residual norm (also the SER reference |R_0|), then iterate.
     r0 = jnp.max(jnp.abs(f(U0)))
-    init = (U0, jnp.asarray(0), r0, r0, jnp.asarray(1.0))
-    U, it, rn, _, _ = jax.lax.while_loop(cond, body, init)
+    init = (U0, jnp.asarray(0), r0, r0, jnp.asarray(1.0), jnp.asarray(0))
+    U, it, rn, _, _, n_rej = jax.lax.while_loop(cond, body, init)
+    jax.debug.callback(_log_newton, it, n_rej, r0, rn, s.tol, s.max_iter)
 
     return U, it, rn
+
+
+def _log_newton(it, n_rej, r0, rn, tol: float, max_iter: int) -> None:
+    """Host-side log line of one Newton solve (logger ``hydrograd.solvers.steady``, INFO)."""
+    it, n_rej, r0, rn = int(it), int(n_rej), float(r0), float(rn)
+    status = "converged" if rn <= tol else ("NOT converged (cap)" if it >= max_iter
+                                             else "NOT converged")
+    logger.info("newton: %d steps (%d rejected), max|R| %.2e -> %.2e, %s",
+                it, n_rej, r0, rn, status)
 
 
 @partial(jax.custom_vjp, nondiff_argnums=(0, 3))
