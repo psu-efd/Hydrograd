@@ -24,6 +24,23 @@ File layout (the keys read here)
     }
 
 Trailing commas, which some example files contain, are tolerated.
+
+1-D cases
+---------
+A run of the 1-D mode (:mod:`hydrograd.oned`) is selected by ``"model": "1D"`` and names
+its case file instead of an SRH-2D file::
+
+    {
+      "control_variables": {
+        "model": "1D",
+        "case_file_name": "case.json",           (see hydrograd.io.oned_case)
+        "bPerform_Forward_Simulation": true
+      },
+      "<mode>_options": { ... }                  (see hydrograd.apps.oned)
+    }
+
+``"time_settings"`` is not used: the steps are part of the case file. Without ``"model"``
+the control describes a 2-D case, as before.
 """
 
 from __future__ import annotations
@@ -62,6 +79,8 @@ class Control:
         dt: (initial) time step (s).
         options: the option block of the active mode.
         raw: the whole JSON.
+        model: ``"2D"`` (default) or ``"1D"``.
+        case_file: name of the 1-D case file (empty for a 2-D case).
     """
 
     path: Path
@@ -73,6 +92,8 @@ class Control:
     dt: float
     options: dict[str, Any]
     raw: dict[str, Any]
+    model: str = "2D"
+    case_file: str = ""
 
     def opt(self, key: str, default: Any = ...) -> Any:
         """Option of the active mode; raises KeyError naming the block if missing.
@@ -137,6 +158,28 @@ def read_control(path: str | Path) -> Control:
     if len(active) != 1:
         raise ValueError(f"{path}: exactly one bPerform_* flag must be true, got {len(active)}")
     mode, block = active[0]
+
+    # 1-D case: the case file holds the steps, so there are no time settings.
+    model = str(cv.get("model", "2D")).upper()
+    if model not in ("1D", "2D"):
+        raise ValueError(f"{path}: \"model\" must be \"1D\" or \"2D\", got {cv['model']!r}")
+
+    if model == "1D":
+        ctrl = Control(
+            path=path,
+            case_dir=path.parent,
+            mode=mode,
+            srhhydro_file="",
+            use_srhhydro_time=False,
+            tspan=(0.0, 0.0),
+            dt=0.0,
+            options=raw.get(block, {}),
+            raw=raw,
+            model="1D",
+            case_file=cv["case_file_name"],
+        )
+        logger.info("run_control: 1-D case %s, mode=%s", ctrl.case_file, mode)
+        return ctrl
 
     # Time settings: span (t0, t1) and step dt (s).
     ts = raw["time_settings"]
