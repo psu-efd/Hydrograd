@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1240pt" height="520pt" viewBox="0 0 1240 520" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-11-15T17:07:29.289456</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <rect x="0" y="0" width="1240" height="520" fill="#ffffff"/>
+<polygon points="724.0,273.9 727.8,273.5 731.7,273.2 735.5,272.9 739.3,272.6 743.2,272.2 747.0,271.9 750.8,271.6 754.7,271.3 758.5,271.0 762.3,270.6 766.2,270.3 770.0,270.0 773.8,269.7 777.7,269.4 781.5,269.0 785.3,268.7 789.2,268.4 793.0,268.1 796.8,267.8 800.7,267.4 804.5,267.1 808.3,266.8 812.2,266.5 816.0,266.1 819.8,265.8 823.7,265.5 827.5,265.1 831.3,264.8 835.2,264.5 839.0,264.1 842.8,263.8 846.7,263.4 850.5,263.1 854.3,262.7 858.2,262.4 862.0,262.0 865.8,261.7 869.7,261.3 873.5,260.9 877.3,260.5 881.2,260.1 885.0,259.7 888.8,259.3 892.7,258.9 896.5,258.5 900.3,258.0 904.2,257.6 908.0,257.1 911.8,256.6 915.7,256.2 919.5,255.6 923.3,255.1 927.2,254.6 931.0,254.0 934.8,253.4 938.7,252.8 942.5,252.1 946.3,251.4 950.2,250.7 954.0,250.0 954.0,250.0 724.0,430.0" fill="#f4cfc6"/>
+<polygon points="954.0,250.0 957.8,249.2 961.7,248.4 965.5,247.5 969.3,246.6 973.2,245.7 977.0,244.7 980.8,243.6 984.7,242.5 988.5,241.4 992.3,240.1 996.2,238.8 1000.0,237.4 1003.8,236.0 1007.7,234.4 1011.5,232.8 1015.3,231.2 1019.2,229.4 1023.0,227.5 1026.8,225.6 1030.7,223.5 1034.5,221.4 1038.3,219.2 1042.2,217.0 1046.0,214.6 1049.8,212.2 1053.7,209.7 1057.5,207.2 1061.3,204.6 1065.2,202.0 1069.0,199.3 1072.8,196.6 1076.7,193.9 1080.5,191.2 1084.3,188.6 1088.2,185.9 1092.0,183.2 1095.8,180.6 1099.7,178.0 1103.5,175.4 1107.3,172.9 1111.2,170.5 1115.0,168.0 1118.8,165.6 1122.7,163.3 1126.5,161.0 1130.3,158.7 1134.2,156.5 1138.0,154.3 1141.8,152.1 1145.7,150.0 1149.5,147.9 1153.3,145.8 1157.2,143.7 1161.0,141.6 1164.8,139.6 1168.7,137.5 1172.5,135.5 1176.3,133.5 1180.2,131.4 1184.0,129.4 1184.0,70.0 954.0,250.0" fill="#dfe9f3"/>
+<g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 520 
+L 1240 520 
+L 1240 0 
+L 0 0 
+L 0 520 
+z
+" style="fill: none"/>
+  </g>
+  <g id="text_1">
+   <!-- $\tau_{r,i} = \tau_{r,m}\left(\dfrac{D_i}{D_m}\right)^{b}$ -->
+   <g transform="translate(972 332) scale(0.2 -0.2)">
+    <defs>
+     <path id="Cmmi10-2b" d="M 997 97 
+Q 997 141 1006 166 
+L 1678 2363 
+L 1100 2363 
+Q 866 2363 662 2216 
+Q 459 2069 325 1844 
+Q 313 1819 288 1819 
+L 213 1819 
+Q 153 1819 153 1881 
+Q 153 1894 166 1919 
+Q 375 2275 614 2517 
+Q 853 2759 1153 2759 
+L 3116 2759 
+Q 3184 2759 3231 2712 
+Q 3278 2666 3278 2597 
+Q 3278 2503 3211 2433 
+Q 3144 2363 3047 2363 
+L 1888 2363 
+L 1459 153 
+Q 1434 50 1365 -17 
+Q 1297 -84 1191 -84 
+Q 1109 -84 1053 -32 
+Q 997 19 997 97 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-84" d="M 494 109 
+Q 494 147 500 166 
+L 978 2075 
+Q 1025 2253 1025 2388 
+Q 1025 2663 838 2663 
+Q 638 2663 541 2423 
+Q 444 2184 353 1819 
+Q 353 1800 334 1789 
+Q 316 1778 300 1778 
+L 225 1778 
+Q 203 1778 187 1801 
+Q 172 1825 172 1844 
+Q 241 2122 305 2315 
+Q 369 2509 505 2668 
+Q 641 2828 844 2828 
+Q 1066 2828 1233 2700 
+Q 1400 2572 1441 2363 
+Q 1603 2575 1811 2701 
+Q 2019 2828 2266 2828 
+Q 2469 2828 2623 2709 
+Q 2778 2591 2778 2388 
+Q 2778 2225 2676 2104 
+Q 2575 1984 2406 1984 
+Q 2303 1984 2233 2048 
+Q 2163 2113 2163 2216 
+Q 2163 2356 2266 2467 
+Q 2369 2578 2503 2578 
+Q 2400 2663 2253 2663 
+Q 1978 2663 1775 2467 
+Q 1572 2272 1409 1972 
+L 953 141 
+Q 931 53 854 -9 
+Q 778 -72 684 -72 
+Q 606 -72 550 -22 
+Q 494 28 494 109 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-2c" d="M 634 -1153 
+Q 634 -1125 659 -1100 
+Q 891 -878 1019 -587 
+Q 1147 -297 1147 25 
+L 1147 103 
+Q 1044 0 891 0 
+Q 744 0 641 103 
+Q 538 206 538 353 
+Q 538 503 641 603 
+Q 744 703 891 703 
+Q 1119 703 1216 492 
+Q 1313 281 1313 25 
+Q 1313 -331 1170 -651 
+Q 1028 -972 769 -1228 
+Q 744 -1241 728 -1241 
+Q 697 -1241 665 -1212 
+Q 634 -1184 634 -1153 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-37" d="M 500 459 
+Q 500 578 550 709 
+L 1069 2088 
+Q 1153 2322 1153 2472 
+Q 1153 2663 1013 2663 
+Q 759 2663 595 2402 
+Q 431 2141 353 1819 
+Q 341 1778 300 1778 
+L 225 1778 
+Q 172 1778 172 1838 
+L 172 1856 
+Q 275 2238 487 2533 
+Q 700 2828 1025 2828 
+Q 1253 2828 1411 2678 
+Q 1569 2528 1569 2297 
+Q 1569 2178 1516 2047 
+L 997 672 
+Q 909 459 909 288 
+Q 909 97 1056 97 
+Q 1306 97 1473 364 
+Q 1641 631 1709 941 
+Q 1722 978 1759 978 
+L 1838 978 
+Q 1863 978 1878 961 
+Q 1894 944 1894 922 
+Q 1894 916 1888 903 
+Q 1800 541 1583 234 
+Q 1366 -72 1044 -72 
+Q 819 -72 659 83 
+Q 500 238 500 459 
+z
+M 1222 3878 
+Q 1222 4013 1334 4122 
+Q 1447 4231 1581 4231 
+Q 1691 4231 1761 4164 
+Q 1831 4097 1831 3994 
+Q 1831 3850 1717 3742 
+Q 1603 3634 1466 3634 
+Q 1363 3634 1292 3704 
+Q 1222 3775 1222 3878 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmr10-29" d="M 481 850 
+Q 428 850 393 890 
+Q 359 931 359 978 
+Q 359 1031 393 1068 
+Q 428 1106 481 1106 
+L 4500 1106 
+Q 4547 1106 4581 1068 
+Q 4616 1031 4616 978 
+Q 4616 931 4581 890 
+Q 4547 850 4500 850 
+L 481 850 
+z
+M 481 2094 
+Q 428 2094 393 2131 
+Q 359 2169 359 2222 
+Q 359 2269 393 2309 
+Q 428 2350 481 2350 
+L 4500 2350 
+Q 4547 2350 4581 2309 
+Q 4616 2269 4616 2222 
+Q 4616 2169 4581 2131 
+Q 4547 2094 4500 2094 
+L 481 2094 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-45" d="M 494 109 
+Q 494 147 500 166 
+L 978 2075 
+Q 1025 2253 1025 2388 
+Q 1025 2663 838 2663 
+Q 638 2663 541 2423 
+Q 444 2184 353 1819 
+Q 353 1800 334 1789 
+Q 316 1778 300 1778 
+L 225 1778 
+Q 203 1778 187 1801 
+Q 172 1825 172 1844 
+Q 241 2122 305 2315 
+Q 369 2509 505 2668 
+Q 641 2828 844 2828 
+Q 1084 2828 1268 2676 
+Q 1453 2525 1453 2291 
+Q 1644 2541 1900 2684 
+Q 2156 2828 2444 2828 
+Q 2747 2828 2967 2673 
+Q 3188 2519 3188 2234 
+Q 3384 2513 3648 2670 
+Q 3913 2828 4225 2828 
+Q 4556 2828 4757 2648 
+Q 4959 2469 4959 2138 
+Q 4959 1875 4842 1503 
+Q 4725 1131 4550 672 
+Q 4459 450 4459 288 
+Q 4459 97 4609 97 
+Q 4859 97 5025 365 
+Q 5191 634 5259 941 
+Q 5278 978 5313 978 
+L 5388 978 
+Q 5413 978 5430 961 
+Q 5447 944 5447 922 
+Q 5447 916 5441 903 
+Q 5353 541 5136 234 
+Q 4919 -72 4594 -72 
+Q 4369 -72 4209 83 
+Q 4050 238 4050 459 
+Q 4050 572 4103 709 
+Q 4284 1191 4404 1569 
+Q 4525 1947 4525 2234 
+Q 4525 2413 4453 2538 
+Q 4381 2663 4213 2663 
+Q 3863 2663 3606 2448 
+Q 3350 2234 3163 1881 
+Q 3150 1819 3144 1784 
+L 2731 141 
+Q 2709 53 2632 -9 
+Q 2556 -72 2463 -72 
+Q 2388 -72 2330 -22 
+Q 2272 28 2272 109 
+Q 2272 147 2278 166 
+L 2688 1797 
+Q 2753 2059 2753 2234 
+Q 2753 2413 2679 2538 
+Q 2606 2663 2431 2663 
+Q 2197 2663 2000 2559 
+Q 1803 2456 1656 2286 
+Q 1509 2116 1388 1881 
+L 953 141 
+Q 931 53 854 -9 
+Q 778 -72 684 -72 
+Q 606 -72 550 -22 
+Q 494 28 494 109 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmex10-77" d="M 4238 -15084 
+Q 3450 -14388 2887 -13497 
+Q 2325 -12606 1984 -11615 
+Q 1644 -10625 1487 -9567 
+Q 1331 -8509 1331 -7425 
+Q 1331 -6334 1487 -5273 
+Q 1644 -4213 1983 -3225 
+Q 2322 -2238 2886 -1345 
+Q 3450 -453 4238 244 
+Q 4238 256 4269 256 
+L 4434 256 
+Q 4453 256 4470 237 
+Q 4488 219 4488 197 
+Q 4488 172 4475 159 
+Q 3744 -563 3239 -1447 
+Q 2734 -2331 2437 -3309 
+Q 2141 -4288 2014 -5319 
+Q 1888 -6350 1888 -7425 
+Q 1888 -8497 2013 -9514 
+Q 2138 -10531 2438 -11522 
+Q 2738 -12513 3244 -13397 
+Q 3750 -14281 4475 -15003 
+Q 4488 -15016 4488 -15041 
+Q 4488 -15059 4469 -15078 
+Q 4450 -15097 4434 -15097 
+L 4269 -15097 
+Q 4238 -15097 4238 -15084 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-3b" d="M 313 0 
+Q 250 0 250 84 
+Q 253 100 262 139 
+Q 272 178 289 201 
+Q 306 225 331 225 
+Q 722 225 878 269 
+Q 959 297 997 441 
+L 1875 3956 
+Q 1888 4019 1888 4044 
+Q 1888 4113 1813 4122 
+Q 1691 4147 1350 4147 
+Q 1288 4147 1288 4231 
+Q 1291 4247 1300 4286 
+Q 1309 4325 1326 4348 
+Q 1344 4372 1369 4372 
+L 3669 4372 
+Q 4116 4372 4450 4155 
+Q 4784 3938 4962 3570 
+Q 5141 3203 5141 2759 
+Q 5141 2269 4937 1778 
+Q 4734 1288 4368 881 
+Q 4003 475 3534 237 
+Q 3066 0 2572 0 
+L 313 0 
+z
+M 1509 275 
+Q 1509 225 1728 225 
+L 2472 225 
+Q 2828 225 3159 372 
+Q 3491 519 3750 775 
+Q 3991 1016 4175 1406 
+Q 4359 1797 4461 2222 
+Q 4563 2647 4563 3003 
+Q 4563 3263 4486 3472 
+Q 4409 3681 4270 3831 
+Q 4131 3981 3922 4064 
+Q 3713 4147 3450 4147 
+L 2747 4147 
+Q 2572 4147 2515 4117 
+Q 2459 4088 2413 3928 
+L 1538 416 
+Q 1509 338 1509 275 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmex10-57" d="M 275 -15097 
+Q 219 -15097 219 -15041 
+Q 219 -15016 231 -15003 
+Q 963 -14281 1466 -13395 
+Q 1969 -12509 2266 -11532 
+Q 2563 -10556 2689 -9536 
+Q 2816 -8516 2816 -7419 
+Q 2816 -6309 2689 -5296 
+Q 2563 -4284 2269 -3312 
+Q 1975 -2341 1465 -1448 
+Q 956 -556 231 159 
+Q 219 172 219 197 
+Q 219 256 275 256 
+L 441 256 
+Q 463 256 475 244 
+Q 1266 -456 1828 -1348 
+Q 2391 -2241 2728 -3231 
+Q 3066 -4222 3219 -5278 
+Q 3372 -6334 3372 -7425 
+Q 3372 -8509 3219 -9562 
+Q 3066 -10616 2728 -11608 
+Q 2391 -12600 1828 -13492 
+Q 1266 -14384 475 -15084 
+Q 463 -15097 441 -15097 
+L 275 -15097 
+z
+" transform="scale(0.015625)"/>
+     <path id="Cmmi10-4b" d="M 1106 -72 
+Q 719 -72 503 231 
+Q 288 534 288 941 
+Q 288 1000 317 1173 
+Q 347 1347 347 1388 
+L 966 3872 
+Q 991 3981 997 4044 
+Q 997 4147 581 4147 
+Q 519 4147 519 4231 
+Q 522 4247 533 4287 
+Q 544 4328 561 4350 
+Q 578 4372 609 4372 
+L 1472 4441 
+Q 1550 4441 1550 4359 
+L 1075 2472 
+Q 1438 2828 1806 2828 
+Q 2078 2828 2273 2684 
+Q 2469 2541 2566 2306 
+Q 2663 2072 2663 1806 
+Q 2663 1497 2542 1167 
+Q 2422 838 2209 555 
+Q 1997 272 1712 100 
+Q 1428 -72 1106 -72 
+z
+M 1119 97 
+Q 1338 97 1528 280 
+Q 1719 463 1838 691 
+Q 1966 947 2077 1386 
+Q 2188 1825 2188 2088 
+Q 2188 2316 2092 2489 
+Q 1997 2663 1791 2663 
+Q 1559 2663 1348 2492 
+Q 1138 2322 978 2088 
+L 800 1363 
+Q 697 959 691 716 
+Q 691 475 795 286 
+Q 900 97 1119 97 
+z
+" transform="scale(0.015625)"/>
+    </defs>
+    <use xlink:href="#Cmmi10-2b" transform="translate(0 0.490855)"/>
+    <use xlink:href="#Cmmi10-84" transform="translate(43.701172 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmmi10-2c" transform="translate(75.283203 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmmi10-37" transform="translate(108.663126 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmr10-29" transform="translate(158.480278 0.490855)"/>
+    <use xlink:href="#Cmmi10-2b" transform="translate(256.165882 0.490855)"/>
+    <use xlink:href="#Cmmi10-84" transform="translate(299.867054 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmmi10-2c" transform="translate(331.449086 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmmi10-45" transform="translate(364.829008 -14.509106) scale(0.7)"/>
+    <use xlink:href="#Cmex10-77" transform="translate(432.004502 132.76452) scale(0.918526)"/>
+    <use xlink:href="#Cmmi10-3b" transform="translate(524.836793 68.14165)"/>
+    <use xlink:href="#Cmmi10-37" transform="translate(607.551636 53.141689) scale(0.7)"/>
+    <use xlink:href="#Cmmi10-3b" transform="translate(505.836793 -68.104268)"/>
+    <use xlink:href="#Cmmi10-45" transform="translate(588.551636 -83.10423) scale(0.7)"/>
+    <use xlink:href="#Cmex10-57" transform="translate(661.97713 132.76452) scale(0.918526)"/>
+    <use xlink:href="#Cmmi10-4b" transform="translate(733.563712 109.426562) scale(0.7)"/>
+    <path d="M 505.836793 22.365855 
+L 505.836793 28.615855 
+L 655.72713 28.615855 
+L 655.72713 22.365855 
+L 505.836793 22.365855 
+z
+"/>
+   </g>
+  </g>
+ </g>
+<text x="24" y="34" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="start">(a) Mixed sizes on one bed</text>
+<text x="62" y="96" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="start">flow</text>
+<path d="M 62.0 106.0 L 62.0 218.0" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 62.0 116.0 L 172.0 116.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<polygon points="180.0,116.0 171.0,119.8 171.0,112.2" fill="#000000"/>
+<path d="M 62.0 140.0 L 158.0 140.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<polygon points="166.0,140.0 157.0,143.8 157.0,136.2" fill="#000000"/>
+<path d="M 62.0 164.0 L 140.0 164.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<polygon points="148.0,164.0 139.0,167.8 139.0,160.2" fill="#000000"/>
+<path d="M 62.0 188.0 L 116.0 188.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<polygon points="124.0,188.0 115.0,191.8 115.0,184.2" fill="#000000"/>
+<path d="M 62.0 210.0 L 84.0 210.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<polygon points="92.0,210.0 83.0,213.8 83.0,206.2" fill="#000000"/>
+<circle cx="80" cy="461" r="30" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="150" cy="464" r="26" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="215" cy="458" r="24" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="280" cy="466" r="30" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="345" cy="460" r="26" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="410" cy="464" r="30" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="478" cy="460" r="28" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="542" cy="464" r="26" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="116" cy="438" r="7" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="183" cy="440" r="6" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="248" cy="437" r="6" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="313" cy="440" r="7" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="378" cy="438" r="6" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="445" cy="437" r="6" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="512" cy="440" r="6" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="130" cy="372" r="58" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="292" cy="380" r="50" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="56" cy="406" r="20" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="364" cy="400" r="22" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="540" cy="402" r="24" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="236" cy="420" r="8" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="194" cy="422" r="7" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="338" cy="424" r="8" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="390" cy="426" r="7" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="26" cy="432" r="8" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="572" cy="430" r="8" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="512" cy="426" r="8" fill="#f1efe9" stroke="#000000" stroke-width="1.1"/>
+<circle cx="452" cy="364" r="66" fill="#dfe9f3" stroke="#000000" stroke-width="1.6"/>
+<circle cx="214" cy="404" r="13" fill="#f4cfc6" stroke="#a61c1c" stroke-width="1.8"/>
+<text x="214" y="250" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">small grain: sheltered by its</text>
+<text x="214" y="268" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">neighbours, harder to move</text>
+<text x="214" y="286" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">than on a bed of its own size</text>
+<path d="M 214.0 296.0 L 214.0 380.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polygon points="214.0,388.0 210.2,379.0 217.8,379.0" fill="#000000"/>
+<text x="452" y="216" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">large grain: exposed to the flow,</text>
+<text x="452" y="234" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">easier to move than on a bed</text>
+<text x="452" y="252" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle">of its own size</text>
+<path d="M 452.0 262.0 L 452.0 287.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polygon points="452.0,295.0 448.2,286.0 455.8,286.0" fill="#000000"/>
+<path d="M 600.0 16.0 L 600.0 504.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="3 5"/>
+<text x="624" y="34" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" fill="#000000" text-anchor="start">(b) Hiding function</text>
+<path d="M 724.0 70.0 L 724.0 430.0 L 1184.0 430.0" fill="none" stroke="#000000" stroke-width="1.3"/>
+<path d="M 724.0 430.0 L 724.0 436.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<path d="M 718.0 430.0 L 724.0 430.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="724.0" y="452" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="middle">0.1</text>
+<text x="714" y="435.0" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="end">0.1</text>
+<path d="M 954.0 430.0 L 954.0 436.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<path d="M 718.0 250.0 L 724.0 250.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="954.0" y="452" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="middle">1</text>
+<text x="714" y="255.0" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="end">1</text>
+<path d="M 1184.0 430.0 L 1184.0 436.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<path d="M 718.0 70.0 L 724.0 70.0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="1184.0" y="452" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="middle">10</text>
+<text x="714" y="75.0" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="end">10</text>
+<path d="M 793.2 430.0 L 793.2 433.5" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 720.5 375.8 L 724.0 375.8" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 884.8 430.0 L 884.8 433.5" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 720.5 304.2 L 724.0 304.2" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 1023.2 430.0 L 1023.2 433.5" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 720.5 195.8 L 724.0 195.8" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 1114.8 430.0 L 1114.8 433.5" fill="none" stroke="#000000" stroke-width="1.0"/>
+<path d="M 720.5 124.2 L 724.0 124.2" fill="none" stroke="#000000" stroke-width="1.0"/>
+<text x="954.0" y="476" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="normal" fill="#000000" text-anchor="middle">grain size / mean size of the bed surface</text>
+<text x="674" y="250.0" font-family="Arial, Helvetica, sans-serif" font-size="14.5" font-weight="normal" fill="#000000" text-anchor="middle" transform="rotate(-90 674 250.0)">reference shear stress / that of the mean size</text>
+<path d="M 724.0 430.0 L 1184.0 70.0" fill="none" stroke="#000000" stroke-width="1.3" stroke-dasharray="7 4"/>
+<path d="M 724.0 250.0 L 1184.0 250.0" fill="none" stroke="#000000" stroke-width="1.3" stroke-dasharray="2 4"/>
+<path d="M 724.0 273.9 L 727.8 273.5 L 731.7 273.2 L 735.5 272.9 L 739.3 272.6 L 743.2 272.2 L 747.0 271.9 L 750.8 271.6 L 754.7 271.3 L 758.5 271.0 L 762.3 270.6 L 766.2 270.3 L 770.0 270.0 L 773.8 269.7 L 777.7 269.4 L 781.5 269.0 L 785.3 268.7 L 789.2 268.4 L 793.0 268.1 L 796.8 267.8 L 800.7 267.4 L 804.5 267.1 L 808.3 266.8 L 812.2 266.5 L 816.0 266.1 L 819.8 265.8 L 823.7 265.5 L 827.5 265.1 L 831.3 264.8 L 835.2 264.5 L 839.0 264.1 L 842.8 263.8 L 846.7 263.4 L 850.5 263.1 L 854.3 262.7 L 858.2 262.4 L 862.0 262.0 L 865.8 261.7 L 869.7 261.3 L 873.5 260.9 L 877.3 260.5 L 881.2 260.1 L 885.0 259.7 L 888.8 259.3 L 892.7 258.9 L 896.5 258.5 L 900.3 258.0 L 904.2 257.6 L 908.0 257.1 L 911.8 256.6 L 915.7 256.2 L 919.5 255.6 L 923.3 255.1 L 927.2 254.6 L 931.0 254.0 L 934.8 253.4 L 938.7 252.8 L 942.5 252.1 L 946.3 251.4 L 950.2 250.7 L 954.0 250.0 L 957.8 249.2 L 961.7 248.4 L 965.5 247.5 L 969.3 246.6 L 973.2 245.7 L 977.0 244.7 L 980.8 243.6 L 984.7 242.5 L 988.5 241.4 L 992.3 240.1 L 996.2 238.8 L 1000.0 237.4 L 1003.8 236.0 L 1007.7 234.4 L 1011.5 232.8 L 1015.3 231.2 L 1019.2 229.4 L 1023.0 227.5 L 1026.8 225.6 L 1030.7 223.5 L 1034.5 221.4 L 1038.3 219.2 L 1042.2 217.0 L 1046.0 214.6 L 1049.8 212.2 L 1053.7 209.7 L 1057.5 207.2 L 1061.3 204.6 L 1065.2 202.0 L 1069.0 199.3 L 1072.8 196.6 L 1076.7 193.9 L 1080.5 191.2 L 1084.3 188.6 L 1088.2 185.9 L 1092.0 183.2 L 1095.8 180.6 L 1099.7 178.0 L 1103.5 175.4 L 1107.3 172.9 L 1111.2 170.5 L 1115.0 168.0 L 1118.8 165.6 L 1122.7 163.3 L 1126.5 161.0 L 1130.3 158.7 L 1134.2 156.5 L 1138.0 154.3 L 1141.8 152.1 L 1145.7 150.0 L 1149.5 147.9 L 1153.3 145.8 L 1157.2 143.7 L 1161.0 141.6 L 1164.8 139.6 L 1168.7 137.5 L 1172.5 135.5 L 1176.3 133.5 L 1180.2 131.4 L 1184.0 129.4" fill="none" stroke="#000000" stroke-width="2.8"/>
+<text x="1090.434301286762" y="116.70359029731668" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="middle" transform="rotate(-38.0 1090.4 116.7)">no hiding</text>
+<text x="728.8735387860858" y="242.0" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="normal" fill="#000000" text-anchor="start">equal mobility</text>
+<text x="1090" y="232" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000" text-anchor="start" transform="rotate(-27.3 1090 232)">Wilcock-Crowe</text>
+<rect x="742" y="86" width="16" height="16" fill="#f4cfc6" stroke="#000000" stroke-width="0.9"/>
+<text x="766" y="98" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">finer than the mean: hidden,</text>
+<text x="766" y="115" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">harder to move than alone</text>
+<rect x="742" y="138" width="16" height="16" fill="#dfe9f3" stroke="#000000" stroke-width="0.9"/>
+<text x="766" y="150" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">coarser than the mean: exposed,</text>
+<text x="766" y="167" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">easier to move than alone</text>
+<text x="972" y="372" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">b = 1: no hiding</text>
+<text x="972" y="391" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">b = 0: equal mobility</text>
+<text x="972" y="410" font-family="Arial, Helvetica, sans-serif" font-size="13.5" font-weight="normal" fill="#000000" text-anchor="start">Wilcock-Crowe: b = 0.12 to 0.67</text>
+</svg>
