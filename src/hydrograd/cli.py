@@ -21,9 +21,16 @@ def run(control_path: Path) -> None:
     Args:
         control_path: the ``run_control.json`` file.
     """
+    ctrl = read_control(control_path)
+
+    # 1-D mode: its own case file and applications.
+    if ctrl.model == "1D":
+        from hydrograd.apps.oned import run_oned
+        run_oned(ctrl)
+        return
+
     from hydrograd.apps.setup import setup_case
 
-    ctrl = read_control(control_path)
     case = setup_case(ctrl)
 
     if ctrl.mode == "forward":

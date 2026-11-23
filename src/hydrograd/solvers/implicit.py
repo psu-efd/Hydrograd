@@ -129,8 +129,8 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, b: 
     Args:
         m: the model (selects the cached Jacobian pattern).
         comp: compressed JVPs of J_local, shape [3 n_colors, 3, n].
-        A: dR/dK, shape [3n, n_in].
-        C: (dK/dU)^T, shape [3n, n_in].
+        A: dR/dK, shape [3n, 2 n_in].
+        C: (dK/dU)^T, shape [3n, 2 n_in].
         b: right-hand side, shape [3, n].
         a: theta dt (s).
         transpose: solve (I - a J)^T x = b (adjoint).

@@ -264,7 +264,8 @@ def rhs_hr(
         theta: differentiable parameters (Manning's n, bed, inflow, NN weights, ...).
         U: state [xi, q_x, q_y], shape [3, n_cells]; with the k-epsilon model
             [xi, q_x, q_y, h k, h epsilon], shape [5, n_cells].
-        K: inlet conveyance weights for the discharge split, or None to compute them.
+        K: inlet coupling [K, WSE] for the discharge split (see
+            :func:`hydrograd.physics.rhs.inlet_coupling`), or None to compute it.
         split: if True, return the linear sinks separately (for point-implicit stepping).
 
     Returns:

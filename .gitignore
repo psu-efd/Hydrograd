@@ -40,3 +40,17 @@ Hydrograd_USWE.code-workspace
 hpc/
 paper/logs/
 *.sbatch
+
+# 1-D benchmark cases whose data cannot be distributed (see benchmarks/oned/compare_srh1d.py)
+benchmarks/oned/local/
+
+# Closure-learning example: job scripts, job output, logs, animations and optimizer
+# histories are kept locally; the result files (JSON) and figures are tracked
+examples/oned/closure_learning/*.sbatch
+examples/oned/closure_learning/results/*.out
+examples/oned/closure_learning/results/*.log
+examples/oned/closure_learning/results/*.gif
+examples/oned/closure_learning/results/*.mp4
+examples/oned/closure_learning/results/*.npz
+examples/oned/closure_learning/results/*.txt
+examples/oned/closure_learning/results/superseded/

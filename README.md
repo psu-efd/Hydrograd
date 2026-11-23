@@ -6,12 +6,13 @@ Differentiable finite-volume solver for the 2D shallow water equations (SWEs) an
 - **Modes:** forward simulation, sensitivity analysis, inversion (Manning's n, bed elevation, inflow hydrograph, exit stage, vegetation and porous drag) and closure learning (USWEs).
 - **Solvers:** explicit (SSP-RK3, Tsit5) with checkpointed reverse-mode gradients; steady Newton with an exact sparse Jacobian and implicit-function-theorem gradients; implicit backward Euler / Crank–Nicolson with per-step adjoints.
 - **Hardware:** CPU and GPU (JAX, float64).
+- **1-D mode (new in v2.0.1):** flow and sediment transport on a network of cross-sections, after the USBR model SRH-1D, for reservoir and river sedimentation; forward simulation, sensitivity analysis and inversion of the sediment parameters. See [The 1-D mode](#the-1-d-mode-flow-and-sediment-transport).
 
 ![Overview of Hydrograd v2.0](docs/images/fig01_overview.png)
 
 *Overview of Hydrograd v2.0. Inputs and parameters define the discrete residual on the unstructured mesh; the state is computed by steady Newton iteration, explicit or implicit time stepping; each solver has a matching gradient method (implicit function theorem, checkpointed reverse-mode AD, per-step adjoint), and the gradient of the loss drives the calibration or closure learning.*
 
-**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The scripts and data of the model description paper (Liu, *Hydrograd v2.0:  differentiable shallow-water modelling on unstructured meshes*, in preparation), which reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff). Releases are archived on Zenodo: [doi:10.5281/zenodo.24045387](https://doi.org/10.5281/zenodo.24045387) (all versions; v2.0.0 is [doi:10.5281/zenodo.24045388](https://doi.org/10.5281/zenodo.24045388)).
+**Documentation:** the user manual is [`docs/manual.md`](docs/manual.md). The scripts and data of the model description paper (Liu, 2026, *Hydrograd v2.0: a differentiable two-dimensional shallow-water model on unstructured meshes with steady and unsteady adjoints for calibration and closure learning*, [arXiv:2611.11540](https://arxiv.org/abs/2611.11540)), which reproduce every figure, are in [`paper/`](paper/). Licence: MIT ([`LICENSE`](LICENSE)); citation: [`CITATION.cff`](CITATION.cff). Releases are archived on Zenodo: [doi:10.5281/zenodo.24045387](https://doi.org/10.5281/zenodo.24045387) (all versions; v2.0.0 is [doi:10.5281/zenodo.24045388](https://doi.org/10.5281/zenodo.24045388)).
 
 Hydrograd v2.0 succeeds [Hydrograd.jl](https://github.com/psu-efd/Hydrograd.jl) (v1.0, Julia; Liu & Song 2025, *Water Resources Research*, doi:10.1029/2025WR040265). It keeps the same case files and run-control format, so v1.0 cases run unchanged.
 
@@ -83,6 +84,30 @@ The run-control format and every option are described in [`docs/manual.md`](docs
 **Scattered velocity data (LSPIV):** an optional `velocity_data` block reads scattered velocities from CSV or PIVlab ASCII files. It maps them to model coordinates, converts surface velocities to depth averages (`surface_factor`), averages them over the cells that contain them, and adds the misfit on those cells to the inversion and UDE losses. See `docs/manual.md`, Sect. 7.1.
 
 **UDE network:** the closure is a local law n_i = f(h_i); `UDE_NN_config.layernorm` defaults to false.
+
+## The 1-D mode: flow and sediment transport
+
+The 1-D mode simulates flow, sediment transport and bed change on a tree-shaped network of cross-sections (tributaries joining, one outlet), for example the sedimentation of a reservoir. It follows SRH-1D, as the 2-D solver follows SRH-2D.
+
+- **Hydraulics:** quasi-steady backwater profiles (standard-step energy equation) with critical-flow controls, solved by Newton iteration with implicit-function-theorem gradients.
+- **Sediment:** several size classes; non-equilibrium total-load routing with Engelund–Hansen capacity, Krone and Partheniades fluxes for cohesive classes, an active layer over a substrate, non-erodible reaches, and consolidation of the deposits.
+- **Gradients:** reverse mode through the whole run (checkpointed time loop) and forward mode, with respect to every sediment and flow parameter.
+- **Shared sediment code:** the closures and the bed-composition model (`hydrograd.sediment`) do not depend on the 1-D geometry, so that 2-D sediment transport can use the same code.
+
+A 1-D case is one JSON file, selected in `run_control.json`:
+
+```json
+{
+  "control_variables": {"model": "1D", "case_file_name": "case.json", "bPerform_Forward_Simulation": true}
+}
+```
+
+```bash
+cp -r examples/oned/reservoir_delta /tmp/reservoir_delta && cd /tmp/reservoir_delta
+hydrograd run            # two years of daily steps in about 4 s on a CPU, including compilation
+```
+
+[`examples/oned/`](examples/oned/) has three cases: a reservoir delta (forward), a twin experiment (sensitivity analysis and inversion of three parameters from a deposit survey) and a confluence of two tributaries. The case-file format, the parameters and the options are described in [`docs/manual.md`](docs/manual.md), Sect. 13. The comparison with SRH-1D v4.0.1 on two cases is in [`benchmarks/oned/`](benchmarks/oned/).
 
 ## Python API (sketch)
 

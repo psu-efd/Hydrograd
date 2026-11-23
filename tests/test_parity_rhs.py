@@ -167,9 +167,15 @@ def test_inlet_split_conserves_Q_and_follows_conveyance(case_copy) -> None:
     flux_in = -normal_q * face_length
     np.testing.assert_allclose(flux_in.sum(), float(model.Q[0]), rtol=1e-12)
 
-    # Shares must follow the conveyance L h^(5/3)/n of the inlet cells.
+    # Shares must follow the conveyance L h_f^(5/3)/n on a level inlet water surface:
+    # h_f = WSE - zb with WSE the (L h)-weighted mean cell WSE of the inlet cells.
     inlet_cells = np.asarray(model.fb_c)[is_inlet]
     h_cell = np.asarray(h)[inlet_cells]
+    zb_cell = np.asarray(model.zb)[inlet_cells]
     n_cell = np.asarray(manning_n)[inlet_cells]
-    conveyance = face_length * h_cell ** (5 / 3) / n_cell
+    weight = face_length * h_cell
+    wse = np.sum(weight * (h_cell + zb_cell)) / weight.sum()
+    h_face = wse - zb_cell
+    assert np.all(h_face > 0.0)
+    conveyance = face_length * h_face ** (5 / 3) / n_cell
     np.testing.assert_allclose(flux_in / flux_in.sum(), conveyance / conveyance.sum(), rtol=1e-12)

@@ -24,7 +24,7 @@ loss.
 
 Inlet coupling: Woodbury identity
 ---------------------------------
-The Jacobian is J = J_local + A C^T (sparse plus rank n_in, see ``solvers.jacobian``).
+The Jacobian is J = J_local + A C^T (sparse plus rank 2 n_in, see ``solvers.jacobian``).
 For a sparse M and thin dense U_w, V_w,
 
     (M + U_w V_w^T)^{-1} b = x - M^{-1} U_w (I + V_w^T M^{-1} U_w)^{-1} V_w^T x,
@@ -42,6 +42,23 @@ dU*/dtheta = -J^{-1} R_theta. For a cotangent g = dL/dU*:
 
 Only reverse mode is supported (the IFT adjoint costs one solve for any number of
 parameters). The closure must be local (no whole-array LayerNorm), so that J is sparse.
+
+Dry cells: active-set adjoint
+-----------------------------
+A dry cell (h <= the scheme's depth floor) has no influence on the residual: h =
+max(xi + h_still, 0) and the desingularized velocities have zero derivative there, so its
+columns of J are zero and J is singular. Its state is also not unique (any xi below the
+bed and any q give R = 0). The gradient therefore holds the dry set D fixed: with W the
+wet unknowns,
+
+    J_WW^T lambda_W = g_W,   lambda_D = 0,
+
+implemented by replacing the rows and columns of the D unknowns by the identity and
+zeroing g_D. This is the exact derivative as long as a small change of theta wets or
+dries no cell; at a parameter value where a cell is just wetting it is one of the
+one-sided derivatives. ``steady_jacobian`` uses the same rule (dU_D/dtheta = 0).
+(``dry_smoothing > 0`` is no substitute: it leaves a film on dry cells that drains down
+any emerged slope, so the steady problem has no exact root there.)
 
 Units: dtau in s; R in m/s (xi row) and m^2/s^2 (momentum rows).
 """
@@ -224,7 +241,7 @@ def _woodbury_solve(M: sp.spmatrix, Uw: np.ndarray, Vw: np.ndarray, b: np.ndarra
 
 
 def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, rhs_vec: np.ndarray,
-                shift: float, transpose: bool) -> np.ndarray:
+                shift: float, transpose: bool, frozen: np.ndarray | None = None) -> np.ndarray:
     """Solve (shift I - J) x = b, or J^T x = b if ``transpose`` (host, SciPy).
 
     J = J_local + A C^T (see ``solvers.jacobian``); b may be a vector or a matrix.
@@ -232,12 +249,15 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, rhs
     Args:
         m: the model (selects the cached Jacobian pattern).
         comp: compressed JVPs of J_local, shape [3 n_colors, 3, n].
-        A: dR/dK, shape [3n, n_in].
-        C: (dK/dU)^T, shape [3n, n_in].
+        A: dR/dK, shape [3n, 2 n_in].
+        C: (dK/dU)^T, shape [3n, 2 n_in].
         rhs_vec: right-hand side b, shape [3, n] (or any shape with 3n rows when flattened
             row-major, e.g. [3n, k]).
         shift: diagonal shift 1/dtau (1/s); ignored when ``transpose`` is True.
         transpose: solve J^T x = b (adjoint) instead of (shift I - J) x = b.
+        frozen: optional mask of held-fixed unknowns (dry cells), any shape with 3n
+            entries when flattened row-major; nonzero = frozen. Their rows and columns of
+            the matrix become the identity and their right-hand side zero, so x = 0 there.
 
     Returns:
         Solution x, float64, same shape as ``rhs_vec``.
@@ -251,16 +271,48 @@ def _host_solve(m: SWEModel, comp: np.ndarray, A: np.ndarray, C: np.ndarray, rhs
     b2 = b.reshape(Jl.shape[0], -1)
 
     if transpose:   # (J_l^T + C A^T) x = b
-        x = _woodbury_solve(Jl.T, C, A, b2)
+        M, Uw, Vw = Jl.T, C, A
     else:           # (shift I - J_l - A C^T) x = b
-        M = sp.identity(Jl.shape[0], format="csc") * float(shift) - Jl
-        x = _woodbury_solve(M, -A, C, b2)
+        M, Uw, Vw = sp.identity(Jl.shape[0], format="csc") * float(shift) - Jl, -A, C
+
+    # Frozen unknowns: identity rows and columns (also in the low-rank inlet term), zero b.
+    if frozen is not None:
+        fz = np.asarray(frozen).reshape(-1) != 0
+        if fz.any():
+            keep = sp.diags((~fz).astype(np.float64))
+            M = (keep @ M @ keep + sp.diags(fz.astype(np.float64))).tocsc()
+            Uw = Uw * (~fz)[:, None]
+            Vw = Vw * (~fz)[:, None]
+            b2 = b2 * (~fz)[:, None]
+
+    x = _woodbury_solve(M, Uw, Vw, b2)
 
     return x.reshape(b.shape).astype(np.float64)
 
 
+def _dry_unknowns(m: SWEModel, theta: Theta, U: Array) -> Array:
+    """Mask of the unknowns of dry cells, which the gradient holds fixed (see module doc).
+
+    A cell is dry when its depth h = xi + h_still is at or below the scheme's depth floor
+    (0 for ``hr_hllc``, h_small for ``julia_xi_roe``), where R does not depend on it.
+
+    Args:
+        m: the model.
+        theta: differentiable parameters (``theta["zb"]`` changes h_still).
+        U: state, shape [n_vars, n_cells].
+
+    Returns:
+        1.0 for every unknown (all rows) of a dry cell, else 0.0; shape of ``U``.
+    """
+    hfloor = m.h_small if m.scheme == "julia_xi_roe" else 0.0
+    hs = m.hstill if "zb" not in theta else m.wstill - theta["zb"]
+    dry = (U[0] + hs <= hfloor).astype(U.dtype)
+    return jnp.broadcast_to(dry, U.shape)
+
+
 def _solve(
     m: SWEModel, lin: tuple[Array, Array, Array], b: Array, shift: Array, transpose: bool,
+    frozen: Array | None = None,
 ) -> Array:
     """JAX wrapper of ``_host_solve`` (host callback; traceable, not differentiable).
 
@@ -270,17 +322,26 @@ def _solve(
         b: right-hand side, shape [3, n].
         shift: diagonal shift 1/dtau (1/s), scalar.
         transpose: solve J^T x = b instead of (shift I - J) x = b.
+        frozen: optional mask of held-fixed unknowns, shape of ``b`` (see ``_host_solve``).
 
     Returns:
         Solution x, float64, same shape as ``b``.
     """
     out = jax.ShapeDtypeStruct(b.shape, jnp.float64)
 
-    def host_callback(c, a, cc, v, s):
-        """Host-side call with NumPy arguments (comp, A, C, b, shift)."""
-        return _host_solve(m, c, a, cc, v, s, transpose)
+    if frozen is None:
+        def host_callback(c, a, cc, v, s):
+            """Host-side call with NumPy arguments (comp, A, C, b, shift)."""
+            return _host_solve(m, c, a, cc, v, s, transpose)
 
-    return jax.pure_callback(host_callback, out, *lin, b, shift, vmap_method="sequential")
+        return jax.pure_callback(host_callback, out, *lin, b, shift, vmap_method="sequential")
+
+    def host_callback_frozen(c, a, cc, v, s, f):
+        """Host-side call with NumPy arguments (comp, A, C, b, shift, frozen mask)."""
+        return _host_solve(m, c, a, cc, v, s, transpose, f)
+
+    return jax.pure_callback(host_callback_frozen, out, *lin, b, shift, frozen,
+                             vmap_method="sequential")
 
 
 # ----------------------------------------------------------------------
@@ -312,15 +373,15 @@ def newton_solve(
 
     def cond(c):
         """Continue while not converged and below the iteration cap."""
-        _, it, rn, _, _ = c
+        _, it, rn, _, _, _ = c
         return (rn > s.tol) & (it < s.max_iter)
 
     def body(c):
         """One pseudo-transient Newton iteration.
 
-        Carry: (U, iteration, max|R(U)|, max|R(U0)|, safeguard factor f_k).
+        Carry: (U, iteration, max|R(U)|, max|R(U0)|, safeguard factor f_k, rejected steps).
         """
-        U, it, rn, r0, fac = c
+        U, it, rn, r0, fac, n_rej = c
 
         # 1. Residual and Jacobian at the current state.
         R = f(U)
@@ -346,14 +407,24 @@ def newton_solve(
         rn = jnp.where(ok, rn_new, rn)
         fac = jnp.where(ok, jnp.minimum(2.0 * fac, 1.0), fac * s.shrink)
 
-        return U, it + 1, rn, r0, fac
+        return U, it + 1, rn, r0, fac, n_rej + jnp.where(ok, 0, 1)
 
     # Initial residual norm (also the SER reference |R_0|), then iterate.
     r0 = jnp.max(jnp.abs(f(U0)))
-    init = (U0, jnp.asarray(0), r0, r0, jnp.asarray(1.0))
-    U, it, rn, _, _ = jax.lax.while_loop(cond, body, init)
+    init = (U0, jnp.asarray(0), r0, r0, jnp.asarray(1.0), jnp.asarray(0))
+    U, it, rn, _, _, n_rej = jax.lax.while_loop(cond, body, init)
+    jax.debug.callback(_log_newton, it, n_rej, r0, rn, s.tol, s.max_iter)
 
     return U, it, rn
+
+
+def _log_newton(it, n_rej, r0, rn, tol: float, max_iter: int) -> None:
+    """Host-side log line of one Newton solve (logger ``hydrograd.solvers.steady``, INFO)."""
+    it, n_rej, r0, rn = int(it), int(n_rej), float(r0), float(rn)
+    status = "converged" if rn <= tol else ("NOT converged (cap)" if it >= max_iter
+                                             else "NOT converged")
+    logger.info("newton: %d steps (%d rejected), max|R| %.2e -> %.2e, %s",
+                it, n_rej, r0, rn, status)
 
 
 @partial(jax.custom_vjp, nondiff_argnums=(0, 3))
@@ -394,8 +465,9 @@ def _bwd(m: SWEModel, s: NewtonSettings, res, g: Array):
     """
     theta, U, U0 = res
 
-    # Adjoint solve J^T lambda = g.
-    lam = _solve(m, linearize(m, theta, U), g, jnp.asarray(0.0), transpose=True)
+    # Adjoint solve J^T lambda = g on the wet unknowns; lambda = 0 on dry cells.
+    lam = _solve(m, linearize(m, theta, U), g, jnp.asarray(0.0), transpose=True,
+                 frozen=_dry_unknowns(m, theta, U))
 
     # dL/dtheta = VJP of R(U*; theta) with -lambda.
     def residual_of_theta(th: Theta) -> Array:
@@ -438,5 +510,6 @@ def steady_jacobian(m: SWEModel, theta: Theta, U: Array) -> np.ndarray:
 
     R_theta = np.asarray(jax.jacfwd(flat_residual_of_param)(p))
 
-    # J x = -R_theta  <=>  (0 I - J) x = R_theta
-    return _host_solve(m, comp, A, C, R_theta, 0.0, transpose=False)
+    # J x = -R_theta  <=>  (0 I - J) x = R_theta, with x = 0 on dry cells
+    frozen = np.asarray(_dry_unknowns(m, theta, U))
+    return _host_solve(m, comp, A, C, R_theta, 0.0, transpose=False, frozen=frozen)
