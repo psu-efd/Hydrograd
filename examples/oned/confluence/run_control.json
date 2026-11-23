@@ -1,0 +1,7 @@
+{
+  "control_variables": {
+    "model": "1D",
+    "case_file_name": "case.json",
+    "bPerform_Forward_Simulation": true
+  }
+}

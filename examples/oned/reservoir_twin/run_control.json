@@ -1,0 +1,33 @@
+{
+  "control_variables": {
+    "model": "1D",
+    "case_file_name": "case.json",
+    "bPerform_Inversion": true
+  },
+  "inversion_options": {
+    "active_param_names": [
+      "a_eh",
+      "kappa_w[0]",
+      "a_r"
+    ],
+    "inversion_truth_file_name": "oned_survey_truth.json",
+    "inversion_survey_relative_sigma": 0.05,
+    "inversion_optimizers": [
+      "Adam",
+      "Adam"
+    ],
+    "inversion_learning_rates": [
+      0.1,
+      0.01
+    ],
+    "inversion_max_iterations": [
+      150,
+      100
+    ],
+    "inversion_abs_tols": [
+      0.0,
+      0.0
+    ],
+    "inversion_save_frequency": 50
+  }
+}

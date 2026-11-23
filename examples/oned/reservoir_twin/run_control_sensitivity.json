@@ -1,0 +1,14 @@
+{
+  "control_variables": {
+    "model": "1D",
+    "case_file_name": "case.json",
+    "bPerform_Sensitivity_Analysis": true
+  },
+  "sensitivity_analysis_options": {
+    "active_param_names": [
+      "a_eh",
+      "kappa_w[0]",
+      "a_r"
+    ]
+  }
+}

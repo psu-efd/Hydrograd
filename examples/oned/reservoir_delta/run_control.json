@@ -1,0 +1,14 @@
+{
+  "control_variables": {
+    "model": "1D",
+    "case_file_name": "case.json",
+    "bPerform_Forward_Simulation": true
+  },
+  "forward_simulation_options": {
+    "survey_times": [
+      31557600.0,
+      63115200.0
+    ],
+    "survey_consolidation": true
+  }
+}
