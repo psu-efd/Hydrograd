@@ -1,6 +1,6 @@
 # Cases of the Hydrograd v2.0 paper
 
-Input files of the cases used in the model description paper (Liu, *Hydrograd v2.0*, GMD, in preparation). Each folder holds the SRH-2D files (`.srhgeom`, `.srhhydro`, `.srhmat`), the `run_control.json`, and, where the case needs them, the initial condition, the truth (observation) file and `.xys` time series. Outputs are not stored; the figure scripts in `paper/` copy a case into a scratch folder before running it.
+Input files of the cases used in the model description paper (Liu, 2026, *Hydrograd v2.0*, [arXiv:2611.11540](https://arxiv.org/abs/2611.11540)). Each folder holds the SRH-2D files (`.srhgeom`, `.srhhydro`, `.srhmat`), the `run_control.json`, and, where the case needs them, the initial condition, the truth (observation) file and `.xys` time series. Outputs are not stored; the figure scripts in `paper/` copy a case into a scratch folder before running it.
 
 **Copy a folder before running it in place:** a forward run writes `forward_simulation_solution_truth.json`, which would overwrite the truth file of the example.
 

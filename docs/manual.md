@@ -1,6 +1,6 @@
 # Hydrograd v2.0 user manual
 
-*Hydrograd* is a differentiable two-dimensional (2D) shallow-water model on unstructured meshes. It runs forward simulations and computes exact gradients of model outputs with respect to model parameters, for calibration (inversion), sensitivity analysis and the training of data-driven closures (universal shallow-water equations, USWEs). This manual explains how to install the model, set up and run a case, and choose the numerical options. The model, its numerics and its verification are described in the accompanying paper (Liu, *Geoscientific Model Development*, in preparation); the examples of the paper are in `paper/`.
+*Hydrograd* is a differentiable two-dimensional (2D) shallow-water model on unstructured meshes; since v2.0.1 it also has a one-dimensional (1-D) mode for flow and sediment transport on networks of cross-sections (Sect. 13). Sections 2 to 12 describe the 2D model. It runs forward simulations and computes exact gradients of model outputs with respect to model parameters, for calibration (inversion), sensitivity analysis and the training of data-driven closures (universal shallow-water equations, USWEs). This manual explains how to install the model, set up and run a case, and choose the numerical options. The model, its numerics and its verification are described in the accompanying paper (Liu, 2026, [arXiv:2611.11540](https://arxiv.org/abs/2611.11540)); the examples of the paper are in `paper/`.
 
 Contents:
 1. Installation
@@ -15,6 +15,7 @@ Contents:
 10. Choosing a solver and a gradient method
 11. Tests
 12. Troubleshooting
+13. The 1-D mode: flow and sediment transport on cross-sections
 
 ---
 
@@ -310,7 +311,7 @@ General advice:
 ## 11. Tests
 
 ```bash
-pytest tests              # about 12 minutes on 8 CPU cores
+pytest tests              # about 25 minutes on 8 CPU cores
 pytest -m "" tests        # including the slow tests
 ```
 
@@ -320,7 +321,8 @@ The tests check:
 - steady, implicit and explicit gradients against finite differences;
 - the sparse Jacobians against dense ones;
 - every closure;
-- agreement with Hydrograd.jl. These tests need Hydrograd.jl reference data and are skipped without them.
+- agreement with Hydrograd.jl. These tests need Hydrograd.jl reference data and are skipped without them;
+- the 1-D mode (Sect. 13.10), including the comparison with SRH-1D on two cases.
 
 ## 12. Troubleshooting
 
@@ -334,3 +336,237 @@ The tests check:
   - bed-elevation gradients on a perfectly flat bed are one-sided (subgradients).
 - **Out of memory in reverse mode:** reduce `checkpoints`, or set `"checkpoints": "auto"` with a memory budget.
 - **Implicit steps fail at wet fronts:** reduce `dt`, or use `SSPRK3()` for the wetting phase.
+
+## 13. The 1-D mode: flow and sediment transport on cross-sections
+
+The 1-D mode simulates flow, sediment transport and bed change on a network of cross-sections, for example the sedimentation of a reservoir and of the rivers that enter it. It follows the USBR model SRH-1D (as the 2-D solver follows SRH-2D) and is differentiable in the same way: the gradient of any output with respect to the sediment and flow parameters is available for sensitivity analysis and calibration. All quantities are in SI units.
+
+Examples are in `examples/oned/` (a reservoir delta, a twin inversion and a confluence), with a README.
+
+### 13.1 What the model solves
+
+One morphological step (typically a day) has two parts:
+
+1. **Hydraulics.** One of two flow solvers (below): by default a quasi-steady backwater profile, the standard-step energy equation between each cross-section and its downstream neighbour, with Manning friction, for the discharge and the outlet water level of the step. Where the energy equation has no subcritical solution (a crest above the pool), the section is a control at critical depth. The system is solved by Newton iteration. The friction slope is S_f = Q²/K², with the conveyance K of the cross-section (below).
+2. **Sediment and bed.** For each size class, the total load relaxes along each reach towards the transport capacity (non-cohesive classes; Engelund–Hansen for sand, or Wilcock–Crowe for sand–gravel mixtures, with an active-layer fraction and a hiding factor) or exchanges with the bed by settling and erosion (cohesive classes; Krone and Partheniades). The deposit of each reach raises the bed of its downstream cross-section (Exner equation), and the composition of the bed is tracked in an active layer over a substrate (Hirano).
+
+The sediment closures and the bed-composition model are independent of the 1-D geometry (`hydrograd.sediment`); the same code is meant to serve 2-D sediment transport. The equations are given in the docstrings of the modules:
+
+| Module | Content |
+|---|---|
+| `hydrograd.oned.network` | tree-shaped networks: numbering, discharge accumulation, bookkeeping of deposits |
+| `hydrograd.oned.geometry` | cross-section properties from station–elevation tables, critical depth |
+| `hydrograd.oned.backwater` | backwater solver and its implicit-function-theorem gradient |
+| `hydrograd.oned.unsteady` | unsteady shallow-water solver for sub- and supercritical flow |
+| `hydrograd.oned.routing` | non-equilibrium routing with the locally implicit bed feedback |
+| `hydrograd.oned.bed`, `hydrograd.sediment.bed` | Exner equation, active layer, substrate, non-erodible floor |
+| `hydrograd.sediment.closures`, `.exchange` | settling, capacity, cohesive fluxes, adaptation lengths, supply limit |
+| `hydrograd.sediment.observation` | deposit volumes with consolidation (Lane and Koelzer) |
+| `hydrograd.oned.stepper` | the time loop |
+| `hydrograd.io.oned_case`, `hydrograd.io.srh1d` | the case file; reader of the bed profiles written by SRH-1D |
+
+**Conveyance.** Two formulas are available (`"hydraulics": {"conveyance": ...}` in the case file):
+
+- **`"segments"`** (default): K = (1/n) Σ A_k^(5/3) / P_k^(2/3), the sum over the slices between neighbouring station points (area A_k, wetted bed length P_k). It rises with the water surface for every section shape. Vertical walls add no friction: a rectangle of width b and depth h has K = b h^(5/3) / n.
+- **`"section"`**: K = A R^(2/3) / n with the hydraulic radius R = A/P of the whole section. Where the water floods a bench or a floodplain, the wetted perimeter jumps and K can fall with rising water surface; the energy equation then has several roots, and the Newton iteration may stop at its limit without having converged. Use it only for sections without benches, for example a narrow rectangular flume, where the wall friction matters.
+
+The two differ for every section shape: `"segments"` gives the larger K, by 4 % for a trapezoid of 80 m bottom width with 2:1 banks at 5 m depth. The bed shear stress is τ_b = ρ g R S_f. By default R is the hydraulic radius of the whole section, for both conveyance formulas (`"hydraulics": {"shear_radius": "section"}`). With `"shear_radius": "depth"` it is the mean depth A/B, which puts the whole friction force on the bed. In a wide section the two are nearly equal. In a narrow channel with smooth vertical walls, such as a flume, the hydraulic radius gives a bed shear stress that is too small (half, for a depth of half the width), while the `"segments"` conveyance has no wall friction; use `"depth"` there.
+
+Manning's formula is one of two resistance laws (`"hydraulics": {"resistance": ...}`). Both give the mean velocity as U = C √(g R S_f) with a dimensionless coefficient C = U/u_*, and the conveyance of a segment or of the section as K = A √(g R) C:
+
+- `"manning"` (default): C = R^(1/6) / (n √g), with Manning's n (`n_manning`).
+- `"variable_power"`: C = a₁ a₂ x / √(a₁² + a₂² x^(5/3)) with x = R/k, a₁ = 6.5 and a₂ = 2.5 (Ferguson, 2007), and a roughness length k in metres (`roughness_length`) in the place of n. For deep flow it is Manning's formula with n = k^(1/6) / (a₁ √g); as the depth falls towards k the resistance rises faster (C is 13 % below the deep-flow value at x = 6 and 37 % below it at x = 2.5), as observed in shallow flow over gravel.
+
+- `"keulegan"`: the logarithmic law C = 2.5 ln(11 x) with x = R/k_s and the roughness height k_s (the same parameter, `roughness_length`). The law turns negative below x = 1/11; below x₀ = e/11 = 0.247, where C = 2.5, it is continued by its tangent through the origin, C = 10.1 x, so that C stays positive and smooth down to zero depth.
+
+The roughness length of the last two laws is a given length (`"roughness_scale": "length"`, default; parameter `roughness_length`) or follows the bed surface (`"roughness_scale": "surface_mean"`): k = `roughness_factor` × D_sg, with D_sg the geometric mean grain size of the active layer of the section, taken at the start of every step. Cui (2007) uses the logarithmic law with the factor 2.5. With `"roughness_scale": "surface_d90"` the D90 of the active layer takes the place of D_sg (Parker, 1990, uses the factor 2): the mean size falls when sand covers the bed, while the D90 follows the coarse grains that make the roughness. The D90 is found by linear interpolation in ln d between the class limits, which are the geometric means of neighbouring class diameters.
+
+With these two laws the shear stress handed to the sediment closures can be reduced for the drag on the largest grains, which does not move sediment (`"transport_stress": "reduced"`; default `"total"`): τ_b (C / C_deep)^1.5, where C_deep is the law of a deep flow over the same roughness. For `"variable_power"` it is a₁ x^(1/6), which gives τ_b [1 + (a₁/a₂)² x^(−5/3)]^(−3/4): 0.81 at x = 6 and 0.50 at x = 2.5. For `"keulegan"` it is the power law 8.1 x^(1/6) (Manning-Strickler), which the logarithmic law follows within 2 % for x of 9 to 200: the factor is 1 for x above 14 and 0.92, 0.82 and 0.64 at x = 5, 2.5 and 1. This is the reduction of Rickenmann and Recking (2011) for steep, shallow streams with the exponent of Meyer-Peter and Müller (1948). The friction slope and the water surface always use the total resistance.
+
+**Flow solver.** Two solvers are available (`"hydraulics": {"flow_solver": ...}` in the case file). Both use the same conveyance and the same Manning's n.
+
+- **`"backwater"`** (default): the quasi-steady energy equation described above. The flow is subcritical; a section where it would be supercritical is held at critical depth. The step can be long (a day), which suits reservoirs and lowland rivers over decades. On a steep reach the depth is then too large and the bed shear stress too small, and the stress no longer responds to the bed slope.
+- **`"unsteady"`**: the unsteady shallow-water (Saint-Venant) equations for the flow area A and the discharge Q,
+
+  ∂A/∂t + ∂Q/∂x = 0,  ∂Q/∂t + ∂(βQ²/A)/∂x + g A ∂η/∂x + g A S_f = 0,
+
+  with the water surface η and the momentum coefficient β. The pressure term is evaluated from the first moment of the flow area of each cross-section, so that a level water surface is at rest over any sequence of sections and a hydraulic jump conserves the specific force. The scheme is staggered (areas at the sections, velocities on the reaches) with upwind momentum advection (Stelling and Duinmeijer, 2003) and explicit in time. It handles subcritical and supercritical flow and the jumps between them, and at steady state the discharge is the same on every reach. Each step of the time loop is divided into `numerics.unsteady.n_substeps` flow steps, which must keep the Courant number (|u| + c) Δt/Δx below 1 (c = √(gA/B); `hydrograd.oned.unsteady.courant_number` returns it). Use it for steep channels and flumes; a reservoir over decades needs tens of millions of flow steps. It is limited to single channels without lateral withdrawals.
+
+  Boundary conditions of the unsteady solver: the inflow at the headwater and the water level at the outlet, as for the backwater solver. A level below the critical depth of the outlet is replaced by the critical depth (a free overfall), and a supercritical flow that arrives with more specific force than the tailwater leaves freely. Where the flow leaves the headwater supercritically, `numerics.unsteady.headwater` sets the second condition: `"uniform"` (default; no acceleration over the first reach) or `"critical"` (the headwater is a critical-flow control). The run starts from the backwater profile of the first step.
+
+  In subcritical flow the two solvers give the same profile up to the discretization (8 mm at a section spacing of 500 m in a channel 3.5 to 8 m deep, halved at 250 m).
+
+### 13.2 Networks
+
+A network is a tree: tributaries join, and one outlet (the dam) closes the system. With N cross-sections there are N − 1 reaches. Sections are numbered so that reach i runs from section i to a downstream section `downstream[i]` with a larger number, and the outlet is the last section. A single channel has `downstream = [1, 2, ..., N-1]`.
+
+- **Headwaters** are the sections no reach flows into. Discharge and inflow load are prescribed there.
+- **Junctions:** a junction is one cross-section with several incoming reaches. Its discharge is the sum of theirs, the incoming loads add, and its capacity and bed supply are shared among the incoming reaches in proportion to their discharge. (SRH-1D repeats the junction cross-section once per river, with independent bed elevations; compare deposited volumes, not bed elevations, at a junction.)
+- **Headwater sections** receive a virtual inflow reach (half of their own outgoing reach by default, `head_inflow_fraction`), in which the prescribed load relaxes towards the capacity of the section; otherwise their bed could never change.
+
+### 13.3 The case file
+
+A 1-D case is one JSON file. `run_control.json` selects the 1-D mode and names it:
+
+```json
+{
+  "control_variables": {
+    "model": "1D",
+    "case_file_name": "case.json",
+    "bPerform_Forward_Simulation": true
+  },
+  "forward_simulation_options": {}
+}
+```
+
+Without `"model"`, a run control describes a 2-D case. `"time_settings"` is not used: the steps are part of the case file.
+
+Blocks of the case file (N sections, J station points per section, K size classes, T steps, H headwaters; arrays are nested lists, row by row):
+
+| Block | Entries |
+|---|---|
+| `"format"`, `"version"` | `"hydrograd-1d-case"`, `1` |
+| `"sediment"` | `diameters` [K] (m, finest first); `cohesive_dmax` (m; finer classes are cohesive, default 6.25e-5); `transport_formula` (`"engelund_hansen"`, or `"wilcock_crowe"` for sand–gravel mixtures); `hiding_form` (`"power"`; `"wilcock_crowe"` is the hiding function of that formula; `"network"` is a neural network); `krone_form` (`"ramp"`) |
+| `"hydraulics"` | `conveyance`: `"segments"` (default) or `"section"`; `shear_radius`: `"section"` (default) or `"depth"`; `resistance`: `"manning"` (default), `"variable_power"` or `"keulegan"`; `roughness_scale`: `"length"` (default), `"surface_mean"` or `"surface_d90"`; `transport_stress`: `"total"` (default) or `"reduced"`; `flow_solver`: `"backwater"` (default) or `"unsteady"` (Sect. 13.1); the block may be absent |
+| `"network"` | `reach_length` [N−1] (m); `downstream` [N−1] (0-based section numbers) |
+| `"sections"` | `s` [N][J] stations (m), not decreasing along a section; `z` [N][J] initial bed elevations (m). All sections have the same J: repeat the last point of shorter tables. |
+| `"bed"` | `p_active` [K][N] and `p_substrate` [K][N] (fractions); `substrate_thickness` [N] (m); `z_floor` [N] (m; non-erodible floor) or `null` |
+| `"forcing"` | `Q_in` [T] or [T][H] (m³/s); `eta_outlet` [T] (m); `dt` [T] (s); `load_in` [K][T] or [K][T][H] (m³/s of solids), or `null` for the rating curve |
+| `"parameters"` | parameter values by name (below); missing ones take their defaults |
+| `"numerics"` | `morph`, `backwater`, `unsteady`, `geometry_smoothing`, `sediment_smoothing`; missing settings take their defaults |
+
+Each step has its own length `dt`, so a long record can also be given as a few flow classes of different duration. A misspelled parameter or setting name, and an array of the wrong shape, are reported as errors. The case files of the examples are written by `examples/oned/build_cases.py`, which shows how to build a case from Python (`hydrograd.io.oned_case.write_case`).
+
+### 13.4 Parameters
+
+| Name | Default | Units | Meaning |
+|---|---|---|---|
+| `n_manning` | 0.03 | s/m^(1/3) | Manning's n: one value, or one per section |
+| `beta_momentum` | (absent: 1) | – | momentum coefficient β of the unsteady flow solver: one value, or one per section; optional |
+| `roughness_length` | (absent) | m | roughness length k of the resistance laws `"variable_power"` and `"keulegan"`: one value, or one per section; required for them with `roughness_scale` `"length"` |
+| `roughness_factor` | (absent) | – | roughness length over the geometric mean size (or the D90) of the active layer; required with `roughness_scale` `"surface_mean"` (or `"surface_d90"`) |
+| `a_eh`, `b_eh` | 0.05, 2.5 | – | coefficient and Shields exponent of Engelund–Hansen |
+| `a_wc`, `tau_r_wc` | 1, 1 | – | multipliers of the transport function and of the reference Shields stress of Wilcock–Crowe (only with that formula) |
+| `m_h` | 0 | – | hiding exponent, ξ_k = (d_k/d_m)^(−m_h); 0 is no hiding (SRH-1D), −1 is equal mobility of all sizes |
+| `kappa_w` [K] | 1 | – | multiplier of the settling velocity (Ferguson and Church) of each class |
+| `alpha_d`, `alpha_e` | 0.25, 1 | – | recovery coefficients of the suspended load in deposition and erosion |
+| `c_b` | 7 | – | bed-load adaptation length L_b = c_b h |
+| `M_e` | 1e-8 | m/s | cohesive erosion rate (volume of solids) |
+| `tau_ce`, `tau_cd` | 0.5, 0.1 | Pa | critical shear stresses for cohesive erosion and for full deposition |
+| `delta_a` | 0.05 | m | active-layer thickness |
+| `gamma1` [K] | 800, 1500, … | kg/m³ | initial dry bulk density of the deposits (first class 800) |
+| `K_cons` [K] | 250, 1, … | kg/m³ | consolidation coefficient per log10(year) |
+| `a_r`, `b_r` | 1e-6, 2 | – | rating curve Q_t = a_r Q^b_r (m³/s of solids), used when `load_in` is `null` |
+| `p_in` [K] | 1/K | – | size fractions of the rating-curve load |
+
+### 13.5 Numerical settings
+
+The defaults of `"numerics"` are the validated scheme; most cases need none of them.
+
+- **`morph.hydro_every`** (1): solve the hydraulics every this many steps.
+- **`morph.n_substeps`** (1): sediment and bed sub-steps per step, with the hydraulics frozen.
+- **`morph.implicit_coupling`** (`"diagonal"`): the locally implicit bed feedback per size class; `"full"` couples the classes through the active-layer composition.
+- **`morph.morph_factor`** (1): morphological acceleration.
+- **`morph.checkpoint`** (`"auto"`): reverse-mode gradients recompute segments of about √T steps instead of storing all steps; an integer sets the segment length, `"none"` stores everything.
+- **`morph.record_every`**, **`morph.snapshot_steps`**: thinning of the recorded histories; steps after which the whole bed table is stored.
+- **`backwater.newton_tol`** (1e-9 m), **`backwater.newton_max_iter`** (40).
+- **`unsteady.n_substeps`** (1): flow steps per step with the unsteady flow solver; **`unsteady.headwater`** (`"uniform"`): condition at a supercritical headwater (Sect. 13.1); **`unsteady.checkpoint_substeps`** (true): reverse-mode gradients recompute the flow steps of a step instead of storing them. The unsteady solver needs `morph.hydro_every` = 1.
+- The options `deposition_scheme`, `implicit_exner`, `composition_update`, `attached_sweeps` and `lag_switch` exist to study the stability of the adjoint (derivatives that grow with the length of a run) and should otherwise keep their defaults.
+
+**Time step.** The scheme is stable at daily steps, but its accuracy at a given step depends on the case: where a reach incises or aggrades quickly, the bed can differ from the time-converged solution by decimetres to metres. Repeat a run with half the step (or `n_substeps: 2`) and compare before relying on it.
+
+### 13.6 Forward simulation
+
+Options (`forward_simulation_options`, all optional): `survey_times` (s; default: the end of the run), `survey_consolidation` (true), `survey_noise_relative` (0) and `survey_noise_seed`, and the two file names below.
+
+| File | Content |
+|---|---|
+| `oned_forward_results.json` | final thalweg and water surface, bulk deposit volume per section, final active-layer fractions, inflow and outflow loads, trap efficiency |
+| `oned_forward_results.npz` | all arrays: bed tables, deposition per step, class and section, histories of thalweg, water surface and loads, bed snapshots |
+| `oned_survey_truth.json` | the surveys: bulk deposit volume per section at each survey time |
+
+A survey is the bulk volume of sediment deposited in the control volume of each cross-section since the start of the run, with the consolidation of the deposits up to the survey if requested. It is the observation of the sensitivity analysis and of the inversion.
+
+### 13.7 Sensitivity analysis
+
+```json
+"sensitivity_analysis_options": {
+  "active_param_names": ["a_eh", "kappa_w[0]", "a_r"],
+  "sensitivity_parameter_values": {"a_eh": 0.04}
+}
+```
+
+A label names a whole parameter (`"a_eh"`; a vector parameter then contributes one column per entry) or one entry of a vector parameter (`"kappa_w[0]"`). `sensitivity_results.json` holds the Jacobian of the surveyed volumes, `jacobian` [S][N][P] (m³ per unit of the parameter), and `jacobian_log`, the same per unit of the logarithm of the parameter, whose columns can be compared between parameters. The Jacobian is computed in forward mode, one pass per active scalar.
+
+### 13.8 Inversion
+
+The inversion minimizes the misfit of the surveyed volumes, Σ (V − V_obs)² / (2σ²), plus optional Gaussian priors, with reverse-mode gradients through the whole run.
+
+```json
+"inversion_options": {
+  "active_param_names": ["a_eh", "kappa_w[0]", "a_r"],
+  "inversion_parameter_initial_values": {"a_eh": 0.03},
+  "inversion_truth_file_name": "oned_survey_truth.json",
+  "inversion_survey_relative_sigma": 0.05,
+  "inversion_parameter_prior_sd": {"a_eh": 0.7},
+  "inversion_optimizers": ["Adam", "Adam"],
+  "inversion_learning_rates": [0.1, 0.01],
+  "inversion_max_iterations": [150, 100]
+}
+```
+
+- **Variables.** The optimizer works on unconstrained variables: the logarithm of positive parameters, a logit for the bounded exponents (`b_eh` in (2, 3), `m_h` in (−1, 1), `b_r` in (1, 3)) and a softmax for `p_in`. Learning rates therefore refer to changes of ln(parameter); 0.1 is a good first value for Adam.
+- **Starting values** default to the values of the case file, which are also the centre of the priors.
+- **Survey error:** `inversion_survey_sigma` (m³), or `inversion_survey_relative_sigma` as a fraction of the root-mean-square observed volume (default 0.05).
+- **Priors:** `inversion_parameter_prior_sd` gives the standard deviation of the unconstrained variable by parameter name; 0.7 on a logarithm means "within a factor of about 2".
+- **Optimizers:** the stages of Sect. 7.1 (`Descent`, `Adam`, `LBFGS`). `LBFGS` needs fewer iterations, but compiling its line search around the whole run takes minutes; `Adam` compiles in seconds.
+- **Outputs:** `inversion_results.json` (initial and final values, losses, modelled and observed volumes), `inversion_loss_history.csv`, and `inversion_callback_save_iter_<n>.json`.
+
+Not every parameter can be identified from a deposit survey; check the sensitivities first, and start from several initial values.
+
+### 13.9 Python interface
+
+```python
+import jax, jax.numpy as jnp
+from hydrograd.io.oned_case import read_case
+from hydrograd.oned import run
+from hydrograd.sediment import bulk_volume_uncompacted
+
+case = read_case("case.json")
+
+def deposit_volume(log_a_eh):
+    """Bulk deposit volume per section (m^3) for the transport coefficient exp(log_a_eh)."""
+    theta = dict(case.theta)
+    theta["a_eh"] = jnp.exp(log_a_eh)
+    result = run(case.config, case.network, theta, case.forcing, case.bed0)
+    return bulk_volume_uncompacted(result.deposition, theta, case.config.sediment)
+
+volume = jax.jit(deposit_volume)(jnp.log(0.05))
+jacobian = jax.jit(jax.jacfwd(deposit_volume))(jnp.log(0.05))     # d volume / d ln(a_eh)
+```
+
+`run` is a pure function of `theta` (and of the arrays of the forcing and the initial bed), so `jax.grad`, `jax.jacfwd` and `jax.vmap` apply. Keep `case.config` and `case.network` as constants of the compiled function (closed over, as above), not as arguments.
+
+### 13.10 Verification
+
+**Comparison with SRH-1D.** `benchmarks/oned/compare_srh1d.py` runs two synthetic cases for which SRH-1D v4.0.1 was run on the same set-up, and compares the thalweg with the bed profiles written by SRH-1D (its input and output files are in `benchmarks/oned/cases/`; results in `benchmarks/oned/results/srh1d_comparison.json`; details in `benchmarks/oned/README.md`). The numbers are for the end of the run and the default conveyance, with those for `"section"`, the formula of SRH-1D, in parentheses. Run times are for 8 CPU cores, without compilation (about 5 s).
+
+| Case | Sections, classes, steps | RMS thalweg difference, all sections | Without the river ends | Largest bed rise, Hydrograd / SRH-1D | Bulk deposit, Hydrograd / SRH-1D | Run time |
+|---|---|---|---|---|---|---|
+| Reservoir, 2 years | 41, 3, 730 | 0.43 m (0.39 m) | 0.16 m (0.09 m) | 6.97 / 6.77 m | 10.52 / 10.37 ×10⁶ m³ | 0.5 s |
+| Confluence, 5 years | 41, 5, 1826 | 0.13 m (0.13 m) | 0.06 m (0.06 m) | 2.05 / 2.67 m | 1.862 / 1.863 ×10⁶ m³ | 1.2 s |
+
+- **River ends.** The largest differences are at the outlet and at the junction, where the two codes spread about the same deposited volume over different lengths. An end section of SRH-1D owns about half a reach, and SRH-1D repeats a junction cross-section once per river, with independent beds. In Hydrograd the outlet section owns its whole incoming reach, and the single junction section owns all its incoming reaches. At the dam of the reservoir the bed therefore rises by 4.8 m in SRH-1D and 2.2 m in Hydrograd (deposits of 167 000 and 156 000 m³); at the junction the three copies of SRH-1D rise by 2.7 to 3.1 m and the junction section of Hydrograd by 1.95 m.
+- **Conveyance.** With `"section"` Hydrograd uses the conveyance of SRH-1D, and the reservoir differs by 0.09 m RMS away from the dam, for a bed rise of 7 m. The default conveyance is 4 % larger for this trapezoid and moves the front of the delta: 0.16 m RMS.
+
+**Irregular cross-sections.** The default conveyance was chosen on a real reservoir with 279 irregular cross-sections and 34 years of daily steps (its data are not distributed). With `"section"`, the Newton iteration of the backwater profile stopped at its limit without having converged on 104 of the 12,417 steps, with residuals of the energy equation of 0.4 m (median) and up to 21 m: at 164 of the 279 sections that conveyance falls with rising water surface, by more than 20 % at 26 of them. The water surface of such a step depends on round-off; raising one bed point by 1e-10 m changed the thalweg within 100 steps by 5 cm. With `"segments"` all steps converge (35 iterations at most) and the same perturbation stays 1e-10 m.
+
+**Tests** (`tests/test_oned_*.py`, `tests/test_sediment_closures.py`):
+
+- **Geometry and hydraulics:** exact section properties and both conveyance formulas; uniform flow and backwater profiles; a crest as a critical-flow control; convergence of the backwater solve on a channel with a bench; networks.
+- **Unsteady flow solver:** a lake at rest over irregular sections; conservation of the water volume; the dam-break solution of Stoker; a hydraulic jump behind a bump and at the foot of a steep channel, at the analytical positions; free supercritical outflow; agreement with the backwater solver in subcritical flow; a run of the time loop with sediment.
+- **Sediment and bed:** exponential settling, relaxation to the transport capacity, volume conservation on a channel and on a network, non-erodible beds, the active layer.
+- **Derivatives:** against central differences for the hydraulics (also through a control section) and for whole runs; forward mode against reverse mode; checkpointed against stored time loops. The relative sensitivity of the deposit volume of the reservoir to the coefficient of the load, d ln V / d ln a_r, stays near one when the run is four times as long.
+- **Applications:** the case file, forward simulation, sensitivity analysis and inversion; the example cases; the comparison with SRH-1D above, within bounds.
+
+The twin example (`examples/oned/reservoir_twin`) recovers a_eh = 0.054, kappa_w of the silt = 1.44 and a_r = 2.00e-6 from one survey with 5 % noise (truth 0.05, 1.5 and 2e-6).

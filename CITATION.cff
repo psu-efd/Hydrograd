@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-message: "If you use Hydrograd, please cite the software and the model description paper."
+message: "If you use Hydrograd, please cite the software and the model description paper (arXiv:2611.11540)."
 title: "Hydrograd: a differentiable two-dimensional shallow-water model on unstructured meshes"
-version: 2.0.0
+version: 2.0.1
 date-released: "2026-11-07"
 doi: 10.5281/zenodo.24045387
 license: MIT
@@ -19,6 +19,19 @@ keywords:
   - flow resistance
   - JAX
 references:
+  - type: article
+    authors:
+      - family-names: Liu
+        given-names: Xiaofeng
+    title: "Hydrograd v2.0: a differentiable two-dimensional shallow-water model on unstructured meshes with steady and unsteady adjoints for calibration and closure learning"
+    year: 2026
+    status: preprint
+    doi: "10.48550/arXiv.2611.11540"
+    url: "https://arxiv.org/abs/2611.11540"
+    identifiers:
+      - type: other
+        value: "arXiv:2611.11540"
+        description: "arXiv preprint of the model description paper"
   - type: article
     authors:
       - family-names: Liu
